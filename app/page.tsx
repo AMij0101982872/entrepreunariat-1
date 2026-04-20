@@ -29,7 +29,7 @@ const T3 = "#9aaabb"; // text muted
 
 type DbMsg = { id: number; from_name: string; to_name: string | null; text: string; created_at: string };
 type Product = { id: number; name: string; price: string; description: string; emoji: string; owner: string };
-type Devis = { id: number; poids: string; destination: string; type_colis: string; description: string; nom: string; created_at: string };
+type Devis = { id: number; poids: string; destination: string; type_colis: string; description: string; nom: string; created_at: string; reponse: string | null; repondu_par: string | null; statut: string };
 
 function Stars({ n, avis }: { n: number; avis: number }) {
   return (
@@ -43,7 +43,7 @@ function Stars({ n, avis }: { n: number; avis: number }) {
 const EMOJIS = ["🎁","👗","👟","💄","📱","💻","📦","🍎","🌿","🪴","🛒","💍"];
 
 export default function Home() {
-  const [tab, setTab] = useState<"agences"|"boutique"|"comparateur"|"devis"|"messages"|"admin">("agences");
+  const [tab, setTab] = useState<"agences"|"boutique"|"comparateur"|"devis"|"mesdevis"|"messages"|"admin">("agences");
   const [search, setSearch] = useState("");
   const [modeFilter, setModeFilter] = useState("Tous");
   const [sortBy, setSortBy] = useState("featured");
@@ -79,6 +79,8 @@ export default function Home() {
   const [showAddProd, setShowAddProd] = useState(false);
 
   const [allDevis, setAllDevis] = useState<Devis[]>([]);
+  const [replyDevis, setReplyDevis] = useState<Devis|null>(null);
+  const [replyText, setReplyText] = useState("");
 
   const channelRef = useRef<ReturnType<typeof supabase.channel>|null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -264,6 +266,7 @@ export default function Home() {
     ["boutique","Boutique"],
     ["comparateur","Comparer"],
     ["devis","Devis"],
+    ["mesdevis","Mes Devis"],
     ["messages","Messages"],
   ];
   if (isOwner) navTabs.push(["admin","Admin"]);
@@ -538,7 +541,7 @@ export default function Home() {
                       <label style={{ fontSize:11, fontWeight:700, color:T2, display:"block", marginBottom:7, textTransform:"uppercase" as const, letterSpacing:"1px" }}>Informations complémentaires</label>
                       <textarea rows={3} placeholder="Date souhaitée, contraintes particulières..." value={devis.desc} onChange={e=>setDevis({...devis,desc:e.target.value})} style={{ width:"100%", padding:"12px 16px", borderRadius:6, border:`1.5px solid ${BORDER}`, fontSize:13, outline:"none", resize:"none" as const, boxSizing:"border-box" as const, color:T1 }}/>
                     </div>
-                    <button onClick={async ()=>{ if(devis.poids&&devis.dest){ await supabase.from("devis").insert({ poids:devis.poids, destination:devis.dest, type_colis:devis.type, description:devis.desc, nom:dn||"Anonyme" }); setDevisOk(true); }}} style={{ background:G, color:N1, border:"none", borderRadius:6, padding:"15px", fontSize:13, fontWeight:800, cursor:"pointer", letterSpacing:"1px", marginTop:4 }}>SOUMETTRE MA DEMANDE →</button>
+                    <button onClick={async ()=>{ if(devis.poids&&devis.dest){ await supabase.from("devis").insert({ poids:devis.poids, destination:devis.dest, type_colis:devis.type, description:devis.desc, nom:dn||"Anonyme", statut:"en_attente" }); setDevisOk(true); }}} style={{ background:G, color:N1, border:"none", borderRadius:6, padding:"15px", fontSize:13, fontWeight:800, cursor:"pointer", letterSpacing:"1px", marginTop:4 }}>SOUMETTRE MA DEMANDE →</button>
                   </div>
                 </>
               ) : (
@@ -546,10 +549,62 @@ export default function Home() {
                   <div style={{ width:64, height:64, borderRadius:12, background:`linear-gradient(135deg,${G},${GD})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:28, margin:"0 auto 20px" }}>✓</div>
                   <h3 style={{ fontSize:20, fontWeight:800, color:T1, marginBottom:10, letterSpacing:"-0.5px" }}>Demande transmise avec succès</h3>
                   <p style={{ color:T2, fontSize:13, marginBottom:24 }}>Les agences partenaires vous contacteront prochainement.</p>
-                  <button onClick={()=>{setTab("messages");setDevisOk(false);setDevis({poids:"",dest:"",type:"",desc:""});}} style={{ background:N1, color:G, border:"none", borderRadius:6, padding:"12px 28px", fontSize:13, fontWeight:700, cursor:"pointer", letterSpacing:"0.5px" }}>ACCÉDER À LA MESSAGERIE →</button>
+                  <button onClick={()=>{setTab("mesdevis");setDevisOk(false);setDevis({poids:"",dest:"",type:"",desc:""});}} style={{ background:G, color:N1, border:"none", borderRadius:6, padding:"12px 28px", fontSize:13, fontWeight:700, cursor:"pointer", letterSpacing:"0.5px" }}>VOIR MES DEVIS →</button>
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* MES DEVIS */}
+        {tab==="mesdevis" && (
+          <div>
+            <div style={{ marginBottom:28 }}>
+              <h2 style={{ fontSize:24, fontWeight:800, color:T1, margin:"0 0 4px", letterSpacing:"-0.5px" }}>Mes demandes de devis</h2>
+              <p style={{ color:T2, fontSize:13, margin:0 }}>Suivez vos demandes et les réponses des agences partenaires</p>
+            </div>
+            {(() => {
+              const myDevis = allDevis.filter(d => d.nom === (dn||myName));
+              if (myDevis.length === 0) return (
+                <div style={{ textAlign:"center" as const, padding:"80px 20px" }}>
+                  <div style={{ fontSize:52, marginBottom:16, opacity:0.3 }}>📋</div>
+                  <div style={{ fontSize:18, fontWeight:700, color:T2, marginBottom:10 }}>Aucune demande envoyée</div>
+                  <button onClick={()=>setTab("devis")} style={{ background:G, color:N1, border:"none", borderRadius:6, padding:"12px 28px", fontSize:13, fontWeight:800, cursor:"pointer", letterSpacing:"0.5px" }}>FAIRE UNE DEMANDE →</button>
+                </div>
+              );
+              return (
+                <div style={{ display:"flex", flexDirection:"column" as const, gap:16 }}>
+                  {myDevis.map(d => (
+                    <div key={d.id} style={{ background:W, borderRadius:12, border:`1.5px solid ${d.statut==="accepte"?"#22c55e":d.reponse?G:BORDER}`, boxShadow:"0 2px 12px rgba(0,0,0,0.04)", overflow:"hidden" }}>
+                      <div style={{ padding:"18px 22px", borderBottom:`1px solid ${BG}`, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                          <div style={{ width:42, height:42, borderRadius:8, background:`linear-gradient(135deg,${N2},${N3})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>📦</div>
+                          <div>
+                            <div style={{ fontWeight:800, fontSize:15, color:T1 }}>{d.destination}</div>
+                            <div style={{ fontSize:11, color:T3, marginTop:2 }}>{d.poids} kg · {d.type_colis||"Colis standard"} · {new Date(d.created_at).toLocaleDateString("fr-FR")}</div>
+                          </div>
+                        </div>
+                        <span style={{ padding:"5px 14px", borderRadius:20, fontSize:11, fontWeight:700, letterSpacing:"0.5px", background: d.statut==="accepte"?"#f0fdf4":d.reponse?"rgba(201,168,76,0.1)":"#f5f6f8", color: d.statut==="accepte"?"#166534":d.reponse?GD:T3, border:`1px solid ${d.statut==="accepte"?"#bbf7d0":d.reponse?`rgba(201,168,76,0.3)`:BORDER}` }}>
+                          {d.statut==="accepte"?"✓ ACCEPTÉ":d.reponse?"✉ RÉPONSE REÇUE":"⏳ EN ATTENTE"}
+                        </span>
+                      </div>
+                      {d.description && <div style={{ padding:"10px 22px", fontSize:12, color:T2, background:BG, borderBottom:`1px solid ${BORDER}` }}>{d.description}</div>}
+                      {d.reponse ? (
+                        <div style={{ padding:"18px 22px" }}>
+                          <div style={{ fontSize:10, fontWeight:700, color:T3, marginBottom:8, textTransform:"uppercase" as const, letterSpacing:"1px" }}>Réponse de {d.repondu_par||"l'agence"}</div>
+                          <div style={{ background:`rgba(201,168,76,0.06)`, border:`1px solid rgba(201,168,76,0.2)`, borderRadius:8, padding:"14px 18px", fontSize:13, color:T1, lineHeight:1.7, marginBottom:14 }}>{d.reponse}</div>
+                          {d.statut !== "accepte" && (
+                            <button onClick={async()=>{ await supabase.from("devis").update({statut:"accepte"}).eq("id",d.id); setAllDevis(prev=>prev.map(x=>x.id===d.id?{...x,statut:"accepte"}:x)); }} style={{ background:"#22c55e", color:W, border:"none", borderRadius:6, padding:"11px 28px", fontSize:13, fontWeight:800, cursor:"pointer", letterSpacing:"0.5px" }}>✓ ACCEPTER CETTE OFFRE</button>
+                          )}
+                        </div>
+                      ) : (
+                        <div style={{ padding:"16px 22px", fontSize:12, color:T3, fontStyle:"italic" as const }}>En attente de réponse d&apos;une agence partenaire...</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -797,14 +852,16 @@ export default function Home() {
               ) : (
                 <div style={{ maxHeight:300, overflowY:"auto" as const }}>
                   <table style={{ width:"100%", borderCollapse:"collapse" as const, fontSize:12 }}>
-                    <thead><tr style={{ background:N1, position:"sticky" as const, top:0 }}>{["Client","Poids","Destination","Type","Date"].map(h=><th key={h} style={{ padding:"10px 14px", textAlign:"left" as const, color:G, fontSize:10, fontWeight:700, letterSpacing:"1px", textTransform:"uppercase" as const }}>{h}</th>)}</tr></thead>
+                    <thead><tr style={{ background:N1, position:"sticky" as const, top:0 }}>{["Client","Poids","Destination","Type","Statut","Date","Action"].map(h=><th key={h} style={{ padding:"10px 14px", textAlign:"left" as const, color:G, fontSize:10, fontWeight:700, letterSpacing:"1px", textTransform:"uppercase" as const }}>{h}</th>)}</tr></thead>
                     <tbody>{allDevis.map((d,i)=>(
                       <tr key={d.id} style={{ borderTop:`1px solid ${BORDER}`, background:i%2===0?W:BG }}>
                         <td style={{ padding:"10px 14px", fontWeight:700, color:T1 }}>{d.nom}</td>
                         <td style={{ padding:"10px 14px", color:G, fontWeight:700 }}>{d.poids} kg</td>
                         <td style={{ padding:"10px 14px", color:T1 }}>{d.destination}</td>
                         <td style={{ padding:"10px 14px", color:T2 }}>{d.type_colis||"—"}</td>
+                        <td style={{ padding:"10px 14px" }}><span style={{ padding:"3px 10px", borderRadius:20, fontSize:10, fontWeight:700, background:d.statut==="accepte"?"#f0fdf4":d.reponse?"rgba(201,168,76,0.1)":BG, color:d.statut==="accepte"?"#166534":d.reponse?GD:T3 }}>{d.statut==="accepte"?"Accepté":d.reponse?"Répondu":"En attente"}</span></td>
                         <td style={{ padding:"10px 14px", color:T3 }}>{new Date(d.created_at).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"2-digit"})}</td>
+                        <td style={{ padding:"10px 14px" }}><button onClick={()=>{setReplyDevis(d);setReplyText(d.reponse||"");}} style={{ background:d.reponse?BG:G, color:d.reponse?T2:N1, border:"none", borderRadius:6, padding:"6px 12px", fontSize:11, fontWeight:700, cursor:"pointer" }}>{d.reponse?"Modifier":"Répondre"}</button></td>
                       </tr>
                     ))}</tbody>
                   </table>
@@ -852,6 +909,28 @@ export default function Home() {
         <div style={{ color:"#2a3545" }}>Plateforme logistique Maroc–Afrique · Casablanca 🇲🇦</div>
         <div style={{ marginTop:6, color:"#1a2535", fontWeight:600 }}>© 2026 DelivraMaroc · Tous droits réservés</div>
       </footer>
+
+      {/* MODAL RÉPONSE DEVIS */}
+      {replyDevis && (
+        <div onClick={()=>setReplyDevis(null)} style={{ position:"fixed", inset:0, background:"rgba(5,10,20,0.85)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, padding:"1rem", backdropFilter:"blur(10px)" }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:W, borderRadius:12, padding:"36px", maxWidth:480, width:"100%", boxShadow:"0 32px 80px rgba(0,0,0,0.4)" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+              <h3 style={{ fontSize:18, fontWeight:800, color:T1, margin:0 }}>Répondre au devis</h3>
+              <button onClick={()=>setReplyDevis(null)} style={{ background:BG, border:"none", borderRadius:6, width:32, height:32, fontSize:18, cursor:"pointer", color:T2 }}>×</button>
+            </div>
+            <div style={{ background:BG, borderRadius:8, padding:"12px 16px", marginBottom:20, fontSize:12, color:T2 }}>
+              <strong style={{ color:T1 }}>{replyDevis.nom}</strong> · {replyDevis.poids} kg → <strong style={{ color:G }}>{replyDevis.destination}</strong> · {replyDevis.type_colis||"Standard"}
+              {replyDevis.description && <div style={{ marginTop:6, color:T3 }}>{replyDevis.description}</div>}
+            </div>
+            <label style={{ fontSize:11, fontWeight:700, color:T2, display:"block", marginBottom:8, textTransform:"uppercase" as const, letterSpacing:"1px" }}>Votre offre (tarif, délai, conditions...)</label>
+            <textarea rows={4} value={replyText} onChange={e=>setReplyText(e.target.value)} placeholder="Ex : Tarif 65 DH/kg, délai 3-5 jours, départ chaque mardi. Contactez-nous au +212 6XX XXX XXX pour confirmer." autoFocus style={{ width:"100%", padding:"13px 16px", borderRadius:6, border:`1.5px solid ${BORDER}`, fontSize:13, outline:"none", resize:"none" as const, boxSizing:"border-box" as const, color:T1, lineHeight:1.6, marginBottom:16 }}/>
+            <div style={{ display:"flex", gap:10 }}>
+              <button onClick={()=>setReplyDevis(null)} style={{ flex:1, padding:"12px", borderRadius:6, border:`1px solid ${BORDER}`, background:BG, color:T2, fontSize:13, fontWeight:600, cursor:"pointer" }}>Annuler</button>
+              <button onClick={async()=>{ if(!replyText.trim()) return; await supabase.from("devis").update({ reponse:replyText.trim(), repondu_par:dn, statut:"repondu" }).eq("id",replyDevis.id); setAllDevis(prev=>prev.map(x=>x.id===replyDevis.id?{...x,reponse:replyText.trim(),repondu_par:dn,statut:"repondu"}:x)); setReplyDevis(null); setReplyText(""); }} style={{ flex:2, background:G, color:N1, border:"none", borderRadius:6, padding:"12px", fontSize:13, fontWeight:800, cursor:"pointer" }}>ENVOYER LA RÉPONSE ✓</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL NOM BOUTIQUE */}
       {showShopEdit && (
