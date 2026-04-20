@@ -29,6 +29,7 @@ const T3 = "#9aaabb"; // text muted
 
 type DbMsg = { id: number; from_name: string; to_name: string | null; text: string; created_at: string };
 type Product = { id: number; name: string; price: string; description: string; emoji: string; owner: string };
+type Devis = { id: number; poids: string; destination: string; type_colis: string; description: string; nom: string; created_at: string };
 
 function Stars({ n, avis }: { n: number; avis: number }) {
   return (
@@ -77,6 +78,8 @@ export default function Home() {
   const [newProd, setNewProd] = useState({ name:"", price:"", description:"", emoji:"📦" });
   const [showAddProd, setShowAddProd] = useState(false);
 
+  const [allDevis, setAllDevis] = useState<Devis[]>([]);
+
   const channelRef = useRef<ReturnType<typeof supabase.channel>|null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
@@ -103,6 +106,17 @@ export default function Home() {
     } else {
       setShowNameModal(true);
     }
+  }, []);
+
+  useEffect(() => {
+    supabase.from("devis").select("*").order("created_at", { ascending: false }).then(({ data }) => {
+      if (data) setAllDevis(data as Devis[]);
+    });
+    const devisSub = supabase.channel("devis-db")
+      .on("postgres_changes", { event:"INSERT", schema:"public", table:"devis" }, ({ new: d }) => {
+        setAllDevis(prev => [d as Devis, ...prev]);
+      }).subscribe();
+    return () => { supabase.removeChannel(devisSub); };
   }, []);
 
   useEffect(() => {
@@ -524,7 +538,7 @@ export default function Home() {
                       <label style={{ fontSize:11, fontWeight:700, color:T2, display:"block", marginBottom:7, textTransform:"uppercase" as const, letterSpacing:"1px" }}>Informations complémentaires</label>
                       <textarea rows={3} placeholder="Date souhaitée, contraintes particulières..." value={devis.desc} onChange={e=>setDevis({...devis,desc:e.target.value})} style={{ width:"100%", padding:"12px 16px", borderRadius:6, border:`1.5px solid ${BORDER}`, fontSize:13, outline:"none", resize:"none" as const, boxSizing:"border-box" as const, color:T1 }}/>
                     </div>
-                    <button onClick={()=>{if(devis.poids&&devis.dest)setDevisOk(true);}} style={{ background:G, color:N1, border:"none", borderRadius:6, padding:"15px", fontSize:13, fontWeight:800, cursor:"pointer", letterSpacing:"1px", marginTop:4 }}>SOUMETTRE MA DEMANDE →</button>
+                    <button onClick={async ()=>{ if(devis.poids&&devis.dest){ await supabase.from("devis").insert({ poids:devis.poids, destination:devis.dest, type_colis:devis.type, description:devis.desc, nom:dn||"Anonyme" }); setDevisOk(true); }}} style={{ background:G, color:N1, border:"none", borderRadius:6, padding:"15px", fontSize:13, fontWeight:800, cursor:"pointer", letterSpacing:"1px", marginTop:4 }}>SOUMETTRE MA DEMANDE →</button>
                   </div>
                 </>
               ) : (
@@ -702,6 +716,7 @@ export default function Home() {
                   { label:"Mois précédent", value: msgsLastMonth.length, sub:"messages", color: T3 },
                   { label:"Boutiques actives", value: boutiqueActivity.filter(b=>b.messages>0).length, sub:`sur ${adminShopOwners.length} total`, color: G },
                   { label:"Nouvelles destinations", value: topDests.length, sub:"détectées dans chats", color: "#60a5fa" },
+                  { label:"Demandes de devis", value: allDevis.length, sub:`${allDevis.filter(d=>new Date(d.created_at)>=monthStart).length} ce mois`, color: G },
                 ].map(s => (
                   <div key={s.label} style={{ background:W, borderRadius:10, padding:"18px 16px", border:`1px solid ${BORDER}`, boxShadow:"0 2px 8px rgba(0,0,0,0.03)" }}>
                     <div style={{ fontSize:28, fontWeight:900, color:T1, lineHeight:1, letterSpacing:"-1px", marginBottom:6 }}>{s.value}</div>
@@ -774,6 +789,28 @@ export default function Home() {
               </div>
             </div>
 
+            <div style={{ background:W, borderRadius:12, padding:"24px", border:`1px solid ${BORDER}`, marginTop:22 }}>
+              <h3 style={{ fontSize:14, fontWeight:800, color:T1, margin:"0 0 4px", textTransform:"uppercase" as const, letterSpacing:"1px" }}>Demandes de devis ({allDevis.length})</h3>
+              <p style={{ color:T3, fontSize:11, margin:"0 0 18px", fontWeight:600 }}>Soumises par les clients via le formulaire</p>
+              {allDevis.length === 0 ? (
+                <div style={{ color:T3, fontSize:13, textAlign:"center" as const, padding:"28px" }}>Aucune demande reçue</div>
+              ) : (
+                <div style={{ maxHeight:300, overflowY:"auto" as const }}>
+                  <table style={{ width:"100%", borderCollapse:"collapse" as const, fontSize:12 }}>
+                    <thead><tr style={{ background:N1, position:"sticky" as const, top:0 }}>{["Client","Poids","Destination","Type","Date"].map(h=><th key={h} style={{ padding:"10px 14px", textAlign:"left" as const, color:G, fontSize:10, fontWeight:700, letterSpacing:"1px", textTransform:"uppercase" as const }}>{h}</th>)}</tr></thead>
+                    <tbody>{allDevis.map((d,i)=>(
+                      <tr key={d.id} style={{ borderTop:`1px solid ${BORDER}`, background:i%2===0?W:BG }}>
+                        <td style={{ padding:"10px 14px", fontWeight:700, color:T1 }}>{d.nom}</td>
+                        <td style={{ padding:"10px 14px", color:G, fontWeight:700 }}>{d.poids} kg</td>
+                        <td style={{ padding:"10px 14px", color:T1 }}>{d.destination}</td>
+                        <td style={{ padding:"10px 14px", color:T2 }}>{d.type_colis||"—"}</td>
+                        <td style={{ padding:"10px 14px", color:T3 }}>{new Date(d.created_at).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"2-digit"})}</td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              )}
+            </div>
             <div style={{ background:W, borderRadius:12, padding:"24px", border:`1px solid ${BORDER}`, marginTop:22 }}>
               <h3 style={{ fontSize:14, fontWeight:800, color:T1, margin:"0 0 18px", textTransform:"uppercase" as const, letterSpacing:"1px" }}>Historique ({dbMessages.length} messages)</h3>
               <div style={{ maxHeight:320, overflowY:"auto" as const }}>
