@@ -11,10 +11,21 @@ create table if not exists products (
   created_at timestamptz default now()
 );
 
--- Activer RLS + autoriser tout (demo)
 alter table products enable row level security;
 drop policy if exists "public_all" on products;
 create policy "public_all" on products for all using (true) with check (true);
-
--- Activer Realtime sur la table
 alter publication supabase_realtime add table products;
+
+-- Table messages (historique persistant)
+create table if not exists messages (
+  id bigserial primary key,
+  from_name text not null,
+  to_name text,
+  text text not null,
+  created_at timestamptz default now()
+);
+
+alter table messages enable row level security;
+drop policy if exists "msgs_all" on messages;
+create policy "msgs_all" on messages for all using (true) with check (true);
+alter publication supabase_realtime add table messages;

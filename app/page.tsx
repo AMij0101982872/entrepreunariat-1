@@ -13,7 +13,7 @@ const agencies = [
   { id:7, name:"Express Cargo Afrique", logo:"EC", color:"#7c3aed", bg:"#faf5ff", type:"Maritime & Routier", slogan:"Transport & Négoce International", description:"Maritime (Congo,Gabon,Angola,Cameroun) + Routier (CI,Burkina,Guinée). Tarifs détaillés.", destinations:["Congo","Gabon","Angola","Cameroun","Côte d'Ivoire","Burkina Faso","Guinée Conakry"], prix_kg:"dès 28 DH/kg", delai:"Maritime 15-30j · Routier 7-15j", note:4.5, avis:76, badge:"MARITIME", verified:true, featured:false, contacts:[{label:"Maroc 1",tel:"+212 620 981 627"},{label:"Maroc 2",tel:"+212 700 273 573"},{label:"Guinée 1",tel:"+224 627 06 14 62"},{label:"Guinée 2",tel:"+224 622 58 79 96"},{label:"Guinée 3",tel:"+224 628 73 90 28"}], modes:["🚢 Maritime","🚛 Routier"], adresse:"Casablanca, Maroc", horaires:"", tarifs:[{article:"Vêtements neufs (maritime)",prix:"65.21 DH",delai:"15-30j"},{article:"Vêtements neufs (routier)",prix:"34.78 DH",delai:"7-15j"},{article:"Cosmétiques (maritime)",prix:"65.21 DH",delai:"15-30j"},{article:"Cosmétiques (routier)",prix:"26.08 DH",delai:"7-15j"},{article:"Chaussures (maritime)",prix:"45.50 DH",delai:"15-30j"},{article:"Chaussures (routier)",prix:"34.78 DH",delai:"7-15j"},{article:"Épices & Alimentaire (routier)",prix:"28.26 DH",delai:"7-15j"},{article:"Vêtements usagés (maritime)",prix:"45.50 DH",delai:"15-30j"},{article:"Vêtements usagés (routier)",prix:"28.26 DH",delai:"7-15j"}], specials:[] },
 ];
 
-type RtMsg = { id: number; from: string; to: string | null; text: string; time: string };
+type DbMsg = { id: number; from_name: string; to_name: string | null; text: string; created_at: string };
 type Product = { id: number; name: string; price: string; description: string; emoji: string; owner: string };
 
 function Stars({ n, avis }: { n: number; avis: number }) {
@@ -28,7 +28,7 @@ function Stars({ n, avis }: { n: number; avis: number }) {
 const EMOJIS = ["📦","👗","👟","💄","📱","💻","🎁","🍎","🌿","🪴","🛍️","💍"];
 
 export default function Home() {
-  const [tab, setTab] = useState<"agences"|"boutique"|"comparateur"|"devis"|"messages">("agences");
+  const [tab, setTab] = useState<"agences"|"boutique"|"comparateur"|"devis"|"messages"|"admin">("agences");
   const [search, setSearch] = useState("");
   const [modeFilter, setModeFilter] = useState("Tous");
   const [sortBy, setSortBy] = useState("featured");
@@ -42,17 +42,25 @@ export default function Home() {
   const [formStatus, setFormStatus] = useState<"idle"|"loading"|"success"|"error">("idle");
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Temps réel
+  // Identité
   const [myName, setMyName] = useState("");
   const [nameInput, setNameInput] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [showNameModal, setShowNameModal] = useState(false);
-  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
-  const [rtMessages, setRtMessages] = useState<RtMsg[]>([]);
+  const [isOwner, setIsOwner] = useState(false);
+  const [connected, setConnected] = useState(false);
+
+  // Boutique / nom affiché
+  const [shopName, setShopName] = useState("");
+  const [shopNameInput, setShopNameInput] = useState("");
+  const [showShopEdit, setShowShopEdit] = useState(false);
+
+  // Chat
+  const [dbMessages, setDbMessages] = useState<DbMsg[]>([]);
   const [chatWith, setChatWith] = useState<string|null>(null);
   const [rtInput, setRtInput] = useState("");
   const [unread, setUnread] = useState<Record<string,number>>({});
-  const [isOwner, setIsOwner] = useState(false);
-  const [connected, setConnected] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
 
   // Boutique
   const [products, setProducts] = useState<Product[]>([]);
@@ -63,6 +71,9 @@ export default function Home() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
 
+  // Nom affiché dans le chat = nom boutique (si propriétaire) ou prénom
+  const displayName = (isOwner && shopName) ? shopName : myName;
+
   useEffect(() => {
     const onScroll = () => setScrollY(window.scrollY);
     window.addEventListener("scroll", onScroll, { passive:true });
@@ -71,21 +82,26 @@ export default function Home() {
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior:"smooth" });
-  }, [rtMessages, chatWith]);
+  }, [dbMessages, chatWith]);
 
+  // Init : charger depuis localStorage
   useEffect(() => {
     setIsOwner(window.location.hostname === "localhost");
     const saved = localStorage.getItem("dm_username");
-    if (saved) setMyName(saved);
-    else setShowNameModal(true);
+    const savedShop = localStorage.getItem("dm_shopname");
+    if (saved) {
+      setMyName(saved);
+      if (savedShop) { setShopName(savedShop); setShopNameInput(savedShop); }
+    } else {
+      setShowNameModal(true);
+    }
   }, []);
 
-  // Charger les produits depuis Supabase
+  // Produits Supabase
   useEffect(() => {
     supabase.from("products").select("*").order("created_at").then(({ data }) => {
       if (data) setProducts(data as Product[]);
     });
-
     const prodSub = supabase.channel("products-db")
       .on("postgres_changes", { event:"INSERT", schema:"public", table:"products" }, ({ new: p }) => {
         setProducts(prev => [...prev, p as Product]);
@@ -94,62 +110,83 @@ export default function Home() {
         setProducts(prev => prev.filter(x => x.id !== (p as Product).id));
       })
       .subscribe();
-
     return () => { supabase.removeChannel(prodSub); };
   }, []);
 
-  // Connexion Supabase Realtime (chat + présence)
+  // Messages + Présence Supabase
   useEffect(() => {
     if (!myName) return;
 
-    const channel = supabase.channel("delivramaroc-chat", {
-      config: { presence: { key: myName } },
-    });
+    // Charger l'historique des messages
+    supabase.from("messages").select("*").order("created_at").limit(500)
+      .then(({ data }) => { if (data) setDbMessages(data as DbMsg[]); });
 
+    // Souscrire aux nouveaux messages en temps réel
+    const msgSub = supabase.channel("messages-realtime")
+      .on("postgres_changes", { event:"INSERT", schema:"public", table:"messages" }, ({ new: msg }) => {
+        const m = msg as DbMsg;
+        setDbMessages(prev => {
+          if (prev.find(x => x.id === m.id)) return prev;
+          return [...prev, m];
+        });
+        if (m.from_name !== displayName) {
+          setUnread(p => {
+            const key = m.to_name === null ? "__public__" : m.from_name;
+            return { ...p, [key]: (p[key] || 0) + 1 };
+          });
+        }
+      })
+      .subscribe();
+
+    // Canal présence
+    const channel = supabase.channel("delivramaroc-presence-v2", {
+      config: { presence: { key: displayName || myName } },
+    });
     channel.on("presence", { event:"sync" }, () => {
       const state = channel.presenceState<{ name: string }>();
-      const users = Object.values(state).flat().map((p: any) => p.name).filter((n: string) => n !== myName);
-      setOnlineUsers([...new Set(users)]);
+      const dn = displayName || myName;
+      const users = Object.values(state).flat().map((p: any) => p.name).filter((n: string) => n !== dn);
+      setOnlineUsers([...new Set(users)] as string[]);
     });
-
-    channel.on("broadcast", { event:"message" }, ({ payload }: { payload: RtMsg }) => {
-      setRtMessages(prev => [...prev, payload]);
-      setUnread(p => {
-        const key = payload.to === null ? "__public__" : payload.from === myName ? payload.to! : payload.from;
-        return { ...p, [key]: (p[key] || 0) + 1 };
-      });
-    });
-
     channel.subscribe(async (status) => {
       if (status === "SUBSCRIBED") {
-        await channel.track({ name: myName });
+        await channel.track({ name: displayName || myName });
         setConnected(true);
       }
     });
-
     channelRef.current = channel;
-    return () => { supabase.removeChannel(channel); setConnected(false); };
-  }, [myName]);
+
+    return () => {
+      supabase.removeChannel(msgSub);
+      supabase.removeChannel(channel);
+      setConnected(false);
+    };
+  }, [myName, shopName]);
 
   const joinChat = () => {
     const n = nameInput.trim();
     if (!n) return;
-    localStorage.setItem("dm_username", n);
+    if (rememberMe) localStorage.setItem("dm_username", n);
     setMyName(n);
     setShowNameModal(false);
   };
 
+  const saveShopName = () => {
+    const s = shopNameInput.trim();
+    setShopName(s);
+    if (s) localStorage.setItem("dm_shopname", s);
+    else localStorage.removeItem("dm_shopname");
+    setShowShopEdit(false);
+  };
+
   const sendRt = async () => {
-    if (!rtInput.trim() || !channelRef.current) return;
-    const msg: RtMsg = {
-      id: Date.now(),
-      from: myName,
-      to: chatWith,
+    if (!rtInput.trim()) return;
+    const dn = displayName || myName;
+    await supabase.from("messages").insert({
+      from_name: dn,
+      to_name: chatWith,
       text: rtInput.trim(),
-      time: new Date().toLocaleTimeString("fr-FR", { hour:"2-digit", minute:"2-digit" }),
-    };
-    await channelRef.current.send({ type:"broadcast", event:"message", payload: msg });
-    setRtMessages(prev => [...prev, msg]);
+    });
     setRtInput("");
   };
 
@@ -162,7 +199,8 @@ export default function Home() {
 
   const addProduct = async () => {
     if (!newProd.name.trim()) return;
-    await supabase.from("products").insert({ ...newProd, owner: myName });
+    const ownerName = displayName || myName;
+    await supabase.from("products").insert({ ...newProd, owner: ownerName });
     setNewProd({ name:"", price:"", description:"", emoji:"📦" });
     setShowAddProd(false);
   };
@@ -171,9 +209,12 @@ export default function Home() {
     await supabase.from("products").delete().eq("id", id);
   };
 
-  const currentMsgs = rtMessages.filter(msg => {
-    if (chatWith === null) return msg.to === null;
-    return (msg.from === myName && msg.to === chatWith) || (msg.from === chatWith && msg.to === myName);
+  const dn = displayName || myName;
+
+  const currentMsgs = dbMessages.filter(msg => {
+    if (chatWith === null) return msg.to_name === null;
+    return (msg.from_name === dn && msg.to_name === chatWith) ||
+           (msg.from_name === chatWith && msg.to_name === dn);
   });
 
   const totalUnread = Object.values(unread).reduce((a, b) => a + b, 0);
@@ -190,7 +231,19 @@ export default function Home() {
     return (b.featured ? 1 : 0) - (a.featured ? 1 : 0);
   });
 
-  const navTabs = [["agences","🏢 Agences"],["boutique","🏪 Boutique"],["comparateur","⚖️ Comparer"],["devis","📋 Devis"],["messages","💬 Messages"]] as const;
+  // Admin data
+  const adminAllUsers = [...new Set(dbMessages.flatMap(m => [m.from_name, m.to_name].filter(Boolean) as string[]))];
+  const adminShopOwners = [...new Set(products.map(p => p.owner))];
+  const adminClients = adminAllUsers.filter(u => !adminShopOwners.includes(u));
+
+  const navTabs: Array<[string, string]> = [
+    ["agences","🏢 Agences"],
+    ["boutique","🏪 Boutique"],
+    ["comparateur","⚖️ Comparer"],
+    ["devis","📋 Devis"],
+    ["messages","💬 Messages"],
+  ];
+  if (isOwner) navTabs.push(["admin","⚙️ Admin"]);
 
   return (
     <main style={{ fontFamily:"'Segoe UI',system-ui,sans-serif", background:"#f1f5f9", minHeight:"100vh" }}>
@@ -204,7 +257,7 @@ export default function Home() {
         </div>
         <div style={{ display:"flex", gap:2, alignItems:"center" }} className="desktop-nav">
           {navTabs.map(([key, label]) => (
-            <button key={key} onClick={() => { setTab(key); if(key==="messages") setUnread({}); }} style={{ padding:"7px 11px", borderRadius:8, fontSize:13, fontWeight:600, cursor:"pointer", border:"none", background:tab===key?"rgba(34,211,238,0.12)":"transparent", color:tab===key?"#22d3ee":"#94a3b8", position:"relative", transition:"all 0.2s" }}>
+            <button key={key} onClick={() => { setTab(key as typeof tab); if(key==="messages") setUnread({}); }} style={{ padding:"7px 11px", borderRadius:8, fontSize:13, fontWeight:600, cursor:"pointer", border:"none", background:tab===key?"rgba(34,211,238,0.12)":"transparent", color:tab===key?"#22d3ee":"#94a3b8", position:"relative", transition:"all 0.2s" }}>
               {label}
               {key==="messages" && totalUnread>0 && <span style={{ position:"absolute", top:1, right:1, background:"#ef4444", color:"#fff", borderRadius:100, fontSize:8, fontWeight:700, padding:"1px 4px" }}>{totalUnread}</span>}
             </button>
@@ -212,7 +265,7 @@ export default function Home() {
           {myName && (
             <div style={{ marginLeft:6, display:"flex", alignItems:"center", gap:6, background:"rgba(34,211,238,0.08)", border:"1px solid rgba(34,211,238,0.2)", borderRadius:8, padding:"5px 11px" }}>
               <span style={{ width:7, height:7, borderRadius:"50%", background:connected?"#22c55e":"#f59e0b", display:"inline-block" }}/>
-              <span style={{ fontSize:12, color:"#67e8f9", fontWeight:600 }}>{myName}{isOwner?" 👑":""}</span>
+              <span style={{ fontSize:12, color:"#67e8f9", fontWeight:600 }}>{dn}{isOwner?" 👑":""}</span>
             </div>
           )}
           <button onClick={() => { setShowForm(true); setFormType("agence"); setFormStatus("idle"); }} style={{ marginLeft:6, background:"linear-gradient(135deg,#22d3ee,#0ea5e9)", color:"#fff", border:"none", borderRadius:8, padding:"8px 14px", fontSize:12, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>+ Inscrire agence</button>
@@ -223,7 +276,7 @@ export default function Home() {
       {menuOpen && (
         <div style={{ position:"fixed", top:62, left:0, right:0, zIndex:299, background:"rgba(8,16,32,0.97)", backdropFilter:"blur(20px)", padding:"12px 1rem", display:"flex", flexDirection:"column" as const, gap:4 }}>
           {navTabs.map(([key, label]) => (
-            <button key={key} onClick={() => { setTab(key); setMenuOpen(false); }} style={{ padding:"12px 16px", borderRadius:8, fontSize:14, fontWeight:600, cursor:"pointer", border:"none", background:tab===key?"rgba(34,211,238,0.12)":"transparent", color:tab===key?"#22d3ee":"#94a3b8", textAlign:"left" as const }}>{label}</button>
+            <button key={key} onClick={() => { setTab(key as typeof tab); setMenuOpen(false); }} style={{ padding:"12px 16px", borderRadius:8, fontSize:14, fontWeight:600, cursor:"pointer", border:"none", background:tab===key?"rgba(34,211,238,0.12)":"transparent", color:tab===key?"#22d3ee":"#94a3b8", textAlign:"left" as const }}>{label}</button>
           ))}
         </div>
       )}
@@ -332,18 +385,23 @@ export default function Home() {
           <div>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:24, flexWrap:"wrap", gap:12 }}>
               <div>
-                <h2 style={{ fontSize:24, fontWeight:800, color:"#0f172a", margin:0 }}>🏪 {isOwner?"Ma Boutique":"Boutique"}</h2>
+                <h2 style={{ fontSize:24, fontWeight:800, color:"#0f172a", margin:0 }}>🏪 {isOwner ? (shopName || myName) : "Boutique"}</h2>
                 <p style={{ color:"#64748b", fontSize:13, margin:"4px 0 0" }}>{isOwner?"Gérez vos produits · Vos clients vous contactent en direct":"Contactez le vendeur directement via la messagerie"}</p>
               </div>
-              {isOwner && <button onClick={()=>setShowAddProd(true)} style={{ background:"linear-gradient(135deg,#22d3ee,#0ea5e9)", color:"#fff", border:"none", borderRadius:10, padding:"10px 20px", fontSize:13, fontWeight:700, cursor:"pointer" }}>＋ Ajouter un produit</button>}
+              {isOwner && (
+                <div style={{ display:"flex", gap:8 }}>
+                  <button onClick={()=>setShowShopEdit(true)} style={{ background:"#f1f5f9", color:"#475569", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 16px", fontSize:13, fontWeight:600, cursor:"pointer" }}>✏️ Nom boutique</button>
+                  <button onClick={()=>setShowAddProd(true)} style={{ background:"linear-gradient(135deg,#22d3ee,#0ea5e9)", color:"#fff", border:"none", borderRadius:10, padding:"10px 20px", fontSize:13, fontWeight:700, cursor:"pointer" }}>＋ Ajouter un produit</button>
+                </div>
+              )}
             </div>
 
             {isOwner && (
               <div style={{ background:"linear-gradient(135deg,#0f172a,#1e3a5f)", borderRadius:16, padding:"20px 24px", marginBottom:28, display:"flex", alignItems:"center", gap:16, flexWrap:"wrap" }}>
                 <div style={{ fontSize:32 }}>👑</div>
                 <div style={{ flex:1 }}>
-                  <div style={{ color:"#22d3ee", fontWeight:800, fontSize:15 }}>Mode Propriétaire · {myName}</div>
-                  <div style={{ color:"#64748b", fontSize:12, marginTop:3 }}>{onlineUsers.length} visiteur(s) connecté(s) en ce moment</div>
+                  <div style={{ color:"#22d3ee", fontWeight:800, fontSize:15 }}>Mode Propriétaire · {dn}</div>
+                  <div style={{ color:"#64748b", fontSize:12, marginTop:3 }}>Nom affiché dans le chat : <strong style={{ color:"#67e8f9" }}>{dn}</strong> · {onlineUsers.length} visiteur(s) connecté(s)</div>
                 </div>
                 <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
                   {onlineUsers.map(u=>(
@@ -367,14 +425,15 @@ export default function Home() {
                     onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.transform="translateY(0)";(e.currentTarget as HTMLElement).style.boxShadow="0 2px 12px rgba(0,0,0,0.05)";}}>
                     <div style={{ background:"linear-gradient(135deg,#f0f9ff,#e0f2fe)", height:130, display:"flex", alignItems:"center", justifyContent:"center", fontSize:60 }}>{p.emoji}</div>
                     <div style={{ padding:"16px" }}>
-                      <div style={{ fontWeight:800, fontSize:16, color:"#0f172a", marginBottom:4 }}>{p.name}</div>
+                      <div style={{ fontWeight:800, fontSize:16, color:"#0f172a", marginBottom:2 }}>{p.name}</div>
+                      <div style={{ fontSize:11, color:"#94a3b8", marginBottom:6 }}>par {p.owner}</div>
                       {p.description && <div style={{ fontSize:12, color:"#64748b", marginBottom:10, lineHeight:1.5 }}>{p.description}</div>}
                       {p.price && <div style={{ fontSize:20, fontWeight:900, color:"#0ea5e9", marginBottom:12 }}>{p.price}</div>}
                       {isOwner ? (
                         <button onClick={()=>deleteProduct(p.id)} style={{ width:"100%", padding:"9px", borderRadius:8, border:"1px solid #fecaca", background:"#fef2f2", color:"#dc2626", fontSize:12, fontWeight:600, cursor:"pointer" }}>🗑️ Supprimer</button>
                       ) : (
-                        <button onClick={()=>{ openChat(null); setTimeout(()=>setRtInput(`Bonjour, je suis intéressé(e) par "${p.name}" 🏷️`),200); }} style={{ width:"100%", padding:"10px", borderRadius:10, border:"none", background:"linear-gradient(135deg,#0ea5e9,#0369a1)", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>
-                          💬 Contacter le vendeur
+                        <button onClick={()=>{ openChat(p.owner); setTimeout(()=>{},200); }} style={{ width:"100%", padding:"10px", borderRadius:10, border:"none", background:"linear-gradient(135deg,#0ea5e9,#0369a1)", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+                          💬 Contacter {p.owner}
                         </button>
                       )}
                     </div>
@@ -452,7 +511,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* MESSAGES TEMPS RÉEL (Supabase) */}
+        {/* MESSAGES */}
         {tab==="messages" && (
           <div>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20, flexWrap:"wrap", gap:10 }}>
@@ -460,7 +519,7 @@ export default function Home() {
               {myName && (
                 <div style={{ fontSize:12, color:"#64748b", display:"flex", alignItems:"center", gap:6 }}>
                   <span style={{ width:8, height:8, borderRadius:"50%", background:connected?"#22c55e":"#f59e0b", display:"inline-block" }}/>
-                  <strong style={{ color:"#0ea5e9" }}>{myName}{isOwner?" 👑":""}</strong>
+                  <strong style={{ color:"#0ea5e9" }}>{dn}{isOwner?" 👑":""}</strong>
                   <span style={{ color:connected?"#22c55e":"#f59e0b" }}>{connected?"· Connecté":"· Connexion…"}</span>
                 </div>
               )}
@@ -525,13 +584,13 @@ export default function Home() {
                     </div>
                   )}
                   {currentMsgs.map(msg=>(
-                    <div key={msg.id} style={{ display:"flex", justifyContent:msg.from===myName?"flex-end":"flex-start", alignItems:"flex-end", gap:8 }}>
-                      {msg.from!==myName && <div style={{ width:28, height:28, borderRadius:8, background:"linear-gradient(135deg,#7c3aed,#a855f7)", display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:900, fontSize:11, flexShrink:0 }}>{msg.from[0].toUpperCase()}</div>}
+                    <div key={msg.id} style={{ display:"flex", justifyContent:msg.from_name===dn?"flex-end":"flex-start", alignItems:"flex-end", gap:8 }}>
+                      {msg.from_name!==dn && <div style={{ width:28, height:28, borderRadius:8, background:"linear-gradient(135deg,#7c3aed,#a855f7)", display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:900, fontSize:11, flexShrink:0 }}>{msg.from_name[0].toUpperCase()}</div>}
                       <div style={{ maxWidth:"70%" }}>
-                        {msg.from!==myName && <div style={{ fontSize:10, color:"#94a3b8", marginBottom:3, fontWeight:600 }}>{msg.from}</div>}
-                        <div style={{ background:msg.from===myName?"linear-gradient(135deg,#0ea5e9,#0369a1)":"#fff", color:msg.from===myName?"#fff":"#334155", borderRadius:msg.from===myName?"16px 16px 4px 16px":"16px 16px 16px 4px", padding:"10px 14px", fontSize:13, boxShadow:msg.from!==myName?"0 1px 6px rgba(0,0,0,0.08)":"none", lineHeight:1.5 }}>
+                        {msg.from_name!==dn && <div style={{ fontSize:10, color:"#94a3b8", marginBottom:3, fontWeight:600 }}>{msg.from_name}</div>}
+                        <div style={{ background:msg.from_name===dn?"linear-gradient(135deg,#0ea5e9,#0369a1)":"#fff", color:msg.from_name===dn?"#fff":"#334155", borderRadius:msg.from_name===dn?"16px 16px 4px 16px":"16px 16px 16px 4px", padding:"10px 14px", fontSize:13, boxShadow:msg.from_name!==dn?"0 1px 6px rgba(0,0,0,0.08)":"none", lineHeight:1.5 }}>
                           {msg.text}
-                          <div style={{ fontSize:10, opacity:0.5, marginTop:4, textAlign:"right" as const }}>{msg.time}</div>
+                          <div style={{ fontSize:10, opacity:0.5, marginTop:4, textAlign:"right" as const }}>{new Date(msg.created_at).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</div>
                         </div>
                       </div>
                     </div>
@@ -539,12 +598,104 @@ export default function Home() {
                   <div ref={chatEndRef}/>
                 </div>
                 <div style={{ padding:"6px 16px", background:"#fffbeb", borderTop:"1px solid #fef3c7", fontSize:10, color:"#92400e", textAlign:"center" as const, flexShrink:0 }}>
-                  ⚡ Propulsé par Supabase Realtime · Messages instantanés
+                  ⚡ Historique sauvegardé · Supabase Realtime
                 </div>
                 <div style={{ padding:"12px 16px", borderTop:"1px solid #f1f5f9", background:"#fff", display:"flex", gap:10, alignItems:"center", flexShrink:0 }}>
                   <input value={rtInput} onChange={e=>setRtInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")sendRt();}} placeholder={myName?`Message ${chatWith?`privé à ${chatWith}`:"public"}...`:"Connectez-vous d'abord…"} disabled={!myName||!connected} style={{ flex:1, padding:"10px 16px", borderRadius:24, border:"1px solid #e2e8f0", fontSize:14, outline:"none", background:"#f8fafc" }}/>
                   <button onClick={sendRt} disabled={!myName||!rtInput.trim()||!connected} style={{ background:"linear-gradient(135deg,#0ea5e9,#0369a1)", color:"#fff", border:"none", borderRadius:"50%", width:42, height:42, fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, opacity:(!myName||!rtInput.trim()||!connected)?0.4:1 }}>➤</button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ADMIN (localhost seulement) */}
+        {tab==="admin" && isOwner && (
+          <div>
+            <div style={{ marginBottom:28 }}>
+              <h2 style={{ fontSize:24, fontWeight:800, color:"#0f172a", margin:"0 0 4px" }}>⚙️ Panel Administrateur</h2>
+              <p style={{ color:"#64748b", fontSize:13, margin:0 }}>Vue complète de la plateforme · Accessible uniquement en local</p>
+            </div>
+
+            {/* Stats */}
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))", gap:16, marginBottom:32 }}>
+              {[
+                { icon:"💬", label:"Messages total", value:dbMessages.length },
+                { icon:"🏪", label:"Boutiques", value:adminShopOwners.length },
+                { icon:"👥", label:"Clients", value:adminClients.length },
+                { icon:"📦", label:"Produits", value:products.length },
+                { icon:"🟢", label:"En ligne", value:onlineUsers.length+1 },
+              ].map(s=>(
+                <div key={s.label} style={{ background:"#fff", borderRadius:16, padding:"20px", border:"1px solid #e2e8f0", boxShadow:"0 2px 8px rgba(0,0,0,0.04)" }}>
+                  <div style={{ fontSize:28, marginBottom:8 }}>{s.icon}</div>
+                  <div style={{ fontSize:28, fontWeight:900, color:"#0ea5e9", lineHeight:1 }}>{s.value}</div>
+                  <div style={{ fontSize:12, color:"#94a3b8", marginTop:4, fontWeight:600 }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:24 }}>
+              {/* Boutiques */}
+              <div style={{ background:"#fff", borderRadius:16, padding:"24px", border:"1px solid #e2e8f0" }}>
+                <h3 style={{ fontSize:16, fontWeight:800, color:"#0f172a", margin:"0 0 16px" }}>🏪 Boutiques ({adminShopOwners.length})</h3>
+                {adminShopOwners.length===0 ? (
+                  <div style={{ color:"#94a3b8", fontSize:13, textAlign:"center" as const, padding:"20px" }}>Aucune boutique</div>
+                ) : adminShopOwners.map(owner=>{
+                  const ownerProducts = products.filter(p=>p.owner===owner);
+                  return (
+                    <div key={owner} style={{ padding:"12px", borderRadius:10, border:"1px solid #f1f5f9", marginBottom:8, display:"flex", alignItems:"center", gap:12 }}>
+                      <div style={{ width:40, height:40, borderRadius:10, background:"linear-gradient(135deg,#0ea5e9,#0369a1)", display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:900, fontSize:14 }}>{owner[0].toUpperCase()}</div>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontWeight:700, fontSize:13, color:"#0f172a" }}>{owner}</div>
+                        <div style={{ fontSize:11, color:"#64748b" }}>{ownerProducts.length} produit(s)</div>
+                      </div>
+                      <button onClick={()=>openChat(owner)} style={{ background:"#eff6ff", color:"#0ea5e9", border:"none", borderRadius:8, padding:"6px 10px", fontSize:11, fontWeight:600, cursor:"pointer" }}>💬</button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Clients */}
+              <div style={{ background:"#fff", borderRadius:16, padding:"24px", border:"1px solid #e2e8f0" }}>
+                <h3 style={{ fontSize:16, fontWeight:800, color:"#0f172a", margin:"0 0 16px" }}>👥 Clients ({adminClients.length})</h3>
+                {adminClients.length===0 ? (
+                  <div style={{ color:"#94a3b8", fontSize:13, textAlign:"center" as const, padding:"20px" }}>Aucun client encore</div>
+                ) : adminClients.map(client=>{
+                  const clientMsgs = dbMessages.filter(m=>m.from_name===client||m.to_name===client);
+                  const lastMsg = clientMsgs[clientMsgs.length-1];
+                  return (
+                    <div key={client} style={{ padding:"12px", borderRadius:10, border:"1px solid #f1f5f9", marginBottom:8, display:"flex", alignItems:"center", gap:12 }}>
+                      <div style={{ width:40, height:40, borderRadius:10, background:"linear-gradient(135deg,#7c3aed,#a855f7)", display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:900, fontSize:14 }}>{client[0].toUpperCase()}</div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontWeight:700, fontSize:13, color:"#0f172a" }}>{client}</div>
+                        {lastMsg && <div style={{ fontSize:11, color:"#94a3b8", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{lastMsg.text}</div>}
+                        <div style={{ fontSize:10, color:"#cbd5e1" }}>{clientMsgs.length} message(s)</div>
+                      </div>
+                      <button onClick={()=>openChat(client)} style={{ background:"#faf5ff", color:"#7c3aed", border:"none", borderRadius:8, padding:"6px 10px", fontSize:11, fontWeight:600, cursor:"pointer" }}>💬</button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Historique messages */}
+            <div style={{ background:"#fff", borderRadius:16, padding:"24px", border:"1px solid #e2e8f0", marginTop:24 }}>
+              <h3 style={{ fontSize:16, fontWeight:800, color:"#0f172a", margin:"0 0 16px" }}>📜 Derniers messages ({dbMessages.length})</h3>
+              <div style={{ maxHeight:320, overflowY:"auto" as const }}>
+                {dbMessages.slice(-30).reverse().map(m=>(
+                  <div key={m.id} style={{ display:"flex", gap:10, padding:"10px 0", borderBottom:"1px solid #f8fafc", alignItems:"flex-start" }}>
+                    <div style={{ width:32, height:32, borderRadius:8, background:"linear-gradient(135deg,#0ea5e9,#7c3aed)", display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:900, fontSize:12, flexShrink:0 }}>{m.from_name[0].toUpperCase()}</div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:2 }}>
+                        <span style={{ fontSize:12, fontWeight:700, color:"#0f172a" }}>{m.from_name}</span>
+                        {m.to_name && <><span style={{ fontSize:10, color:"#94a3b8" }}>→</span><span style={{ fontSize:11, color:"#0ea5e9", fontWeight:600 }}>{m.to_name}</span></>}
+                        {!m.to_name && <span style={{ fontSize:9, background:"#e0f2fe", color:"#0369a1", borderRadius:100, padding:"1px 6px", fontWeight:600 }}>PUBLIC</span>}
+                        <span style={{ fontSize:10, color:"#cbd5e1", marginLeft:"auto" }}>{new Date(m.created_at).toLocaleString("fr-FR",{hour:"2-digit",minute:"2-digit",day:"2-digit",month:"2-digit"})}</span>
+                      </div>
+                      <div style={{ fontSize:12, color:"#475569", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.text}</div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -566,6 +717,21 @@ export default function Home() {
         <div style={{ color:"#475569" }}>Marketplace de livraison Maroc–Afrique · Casablanca 🇲🇦</div>
         <div style={{ marginTop:6, color:"#1e293b" }}>© 2026 DelivraMaroc</div>
       </footer>
+
+      {/* MODAL NOM BOUTIQUE */}
+      {showShopEdit && (
+        <div onClick={()=>setShowShopEdit(false)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.75)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, padding:"1rem", backdropFilter:"blur(8px)" }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:"#fff", borderRadius:20, padding:"32px", maxWidth:400, width:"100%", boxShadow:"0 24px 64px rgba(0,0,0,0.4)" }}>
+            <h3 style={{ fontSize:18, fontWeight:800, color:"#0f172a", margin:"0 0 8px" }}>🏪 Nom de ma boutique</h3>
+            <p style={{ color:"#64748b", fontSize:13, marginBottom:20 }}>Ce nom apparaîtra dans le chat à la place de votre prénom.</p>
+            <input value={shopNameInput} onChange={e=>setShopNameInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveShopName();}} placeholder="Ex: Boutique Ivan, ShopMaroc..." autoFocus style={{ width:"100%", padding:"13px 16px", borderRadius:12, border:"2px solid #e2e8f0", fontSize:15, outline:"none", boxSizing:"border-box" as const, marginBottom:14 }}/>
+            <div style={{ display:"flex", gap:10 }}>
+              <button onClick={()=>setShowShopEdit(false)} style={{ flex:1, padding:"12px", borderRadius:10, border:"1px solid #e2e8f0", background:"#f8fafc", color:"#64748b", fontSize:14, fontWeight:600, cursor:"pointer" }}>Annuler</button>
+              <button onClick={saveShopName} style={{ flex:2, background:"linear-gradient(135deg,#22d3ee,#0ea5e9)", color:"#fff", border:"none", borderRadius:10, padding:"12px", fontSize:14, fontWeight:700, cursor:"pointer" }}>Enregistrer ✓</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL AJOUTER PRODUIT */}
       {showAddProd && (
@@ -650,6 +816,10 @@ export default function Home() {
               </div>
             )}
             <input value={nameInput} onChange={e=>setNameInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")joinChat();}} placeholder="Votre prénom..." autoFocus style={{ width:"100%", padding:"14px 18px", borderRadius:12, border:"2px solid #e2e8f0", fontSize:16, outline:"none", boxSizing:"border-box" as const, marginBottom:14, textAlign:"center" as const, fontWeight:600 }}/>
+            <label style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, marginBottom:18, cursor:"pointer", fontSize:13, color:"#64748b" }}>
+              <input type="checkbox" checked={rememberMe} onChange={e=>setRememberMe(e.target.checked)} style={{ width:16, height:16, cursor:"pointer" }}/>
+              Se souvenir de moi
+            </label>
             <button onClick={joinChat} style={{ width:"100%", background:"linear-gradient(135deg,#22d3ee,#0ea5e9)", color:"#fff", border:"none", borderRadius:12, padding:"14px", fontSize:15, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 16px rgba(34,211,238,0.35)" }}>
               Rejoindre la plateforme →
             </button>
