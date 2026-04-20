@@ -13,19 +13,33 @@ const agencies = [
   { id:7, name:"Express Cargo Afrique", logo:"EC", color:"#7c3aed", bg:"#faf5ff", type:"Maritime & Routier", slogan:"Transport & Négoce International", description:"Maritime (Congo,Gabon,Angola,Cameroun) + Routier (CI,Burkina,Guinée). Tarifs détaillés.", destinations:["Congo","Gabon","Angola","Cameroun","Côte d'Ivoire","Burkina Faso","Guinée Conakry"], prix_kg:"dès 28 DH/kg", delai:"Maritime 15-30j · Routier 7-15j", note:4.5, avis:76, badge:"MARITIME", verified:true, featured:false, contacts:[{label:"Maroc 1",tel:"+212 620 981 627"},{label:"Maroc 2",tel:"+212 700 273 573"},{label:"Guinée 1",tel:"+224 627 06 14 62"},{label:"Guinée 2",tel:"+224 622 58 79 96"},{label:"Guinée 3",tel:"+224 628 73 90 28"}], modes:["🚢 Maritime","🚛 Routier"], adresse:"Casablanca, Maroc", horaires:"", tarifs:[{article:"Vêtements neufs (maritime)",prix:"65.21 DH",delai:"15-30j"},{article:"Vêtements neufs (routier)",prix:"34.78 DH",delai:"7-15j"},{article:"Cosmétiques (maritime)",prix:"65.21 DH",delai:"15-30j"},{article:"Cosmétiques (routier)",prix:"26.08 DH",delai:"7-15j"},{article:"Chaussures (maritime)",prix:"45.50 DH",delai:"15-30j"},{article:"Chaussures (routier)",prix:"34.78 DH",delai:"7-15j"},{article:"Épices & Alimentaire (routier)",prix:"28.26 DH",delai:"7-15j"},{article:"Vêtements usagés (maritime)",prix:"45.50 DH",delai:"15-30j"},{article:"Vêtements usagés (routier)",prix:"28.26 DH",delai:"7-15j"}], specials:[] },
 ];
 
+// Design tokens
+const G = "#c9a84c"; // gold
+const GL = "#f0d98a"; // gold light
+const GD = "#8a6b1e"; // gold dark
+const N1 = "#0a0f1e"; // navy darkest
+const N2 = "#0f1f3d"; // navy dark
+const N3 = "#1a3260"; // navy medium
+const W = "#ffffff";
+const BG = "#f5f6f8"; // background
+const BORDER = "#e4e8ef";
+const T1 = "#0f1f3d"; // text primary
+const T2 = "#5a6b82"; // text secondary
+const T3 = "#9aaabb"; // text muted
+
 type DbMsg = { id: number; from_name: string; to_name: string | null; text: string; created_at: string };
 type Product = { id: number; name: string; price: string; description: string; emoji: string; owner: string };
 
 function Stars({ n, avis }: { n: number; avis: number }) {
   return (
-    <span style={{ fontSize:12, color:"#64748b" }}>
-      <span style={{ color:"#f59e0b" }}>{"★".repeat(Math.floor(n))}{"☆".repeat(5-Math.floor(n))}</span>
+    <span style={{ fontSize:12, color:T2 }}>
+      <span style={{ color:G }}>{"★".repeat(Math.floor(n))}{"☆".repeat(5-Math.floor(n))}</span>
       {" "}{n} <span style={{ opacity:0.6 }}>({avis} avis)</span>
     </span>
   );
 }
 
-const EMOJIS = ["📦","👗","👟","💄","📱","💻","🎁","🍎","🌿","🪴","🛍️","💍"];
+const EMOJIS = ["🎁","👗","👟","💄","📱","💻","📦","🍎","🌿","🪴","🛒","💍"];
 
 export default function Home() {
   const [tab, setTab] = useState<"agences"|"boutique"|"comparateur"|"devis"|"messages"|"admin">("agences");
@@ -42,7 +56,6 @@ export default function Home() {
   const [formStatus, setFormStatus] = useState<"idle"|"loading"|"success"|"error">("idle");
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Identité
   const [myName, setMyName] = useState("");
   const [nameInput, setNameInput] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
@@ -50,19 +63,16 @@ export default function Home() {
   const [isOwner, setIsOwner] = useState(false);
   const [connected, setConnected] = useState(false);
 
-  // Boutique / nom affiché
   const [shopName, setShopName] = useState("");
   const [shopNameInput, setShopNameInput] = useState("");
   const [showShopEdit, setShowShopEdit] = useState(false);
 
-  // Chat
   const [dbMessages, setDbMessages] = useState<DbMsg[]>([]);
   const [chatWith, setChatWith] = useState<string|null>(null);
   const [rtInput, setRtInput] = useState("");
   const [unread, setUnread] = useState<Record<string,number>>({});
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
 
-  // Boutique
   const [products, setProducts] = useState<Product[]>([]);
   const [newProd, setNewProd] = useState({ name:"", price:"", description:"", emoji:"📦" });
   const [showAddProd, setShowAddProd] = useState(false);
@@ -71,7 +81,6 @@ export default function Home() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
 
-  // Nom affiché dans le chat = nom boutique (si propriétaire) ou prénom
   const displayName = (isOwner && shopName) ? shopName : myName;
 
   useEffect(() => {
@@ -84,7 +93,6 @@ export default function Home() {
     chatEndRef.current?.scrollIntoView({ behavior:"smooth" });
   }, [dbMessages, chatWith]);
 
-  // Init : charger depuis localStorage
   useEffect(() => {
     setIsOwner(window.location.hostname === "localhost");
     const saved = localStorage.getItem("dm_username");
@@ -97,7 +105,6 @@ export default function Home() {
     }
   }, []);
 
-  // Produits Supabase
   useEffect(() => {
     supabase.from("products").select("*").order("created_at").then(({ data }) => {
       if (data) setProducts(data as Product[]);
@@ -113,15 +120,10 @@ export default function Home() {
     return () => { supabase.removeChannel(prodSub); };
   }, []);
 
-  // Messages + Présence Supabase
   useEffect(() => {
     if (!myName) return;
-
-    // Charger l'historique des messages
     supabase.from("messages").select("*").order("created_at").limit(500)
       .then(({ data }) => { if (data) setDbMessages(data as DbMsg[]); });
-
-    // Souscrire aux nouveaux messages en temps réel
     const msgSub = supabase.channel("messages-realtime")
       .on("postgres_changes", { event:"INSERT", schema:"public", table:"messages" }, ({ new: msg }) => {
         const m = msg as DbMsg;
@@ -137,8 +139,6 @@ export default function Home() {
         }
       })
       .subscribe();
-
-    // Canal présence
     const channel = supabase.channel("delivramaroc-presence-v2", {
       config: { presence: { key: displayName || myName } },
     });
@@ -155,7 +155,6 @@ export default function Home() {
       }
     });
     channelRef.current = channel;
-
     return () => {
       supabase.removeChannel(msgSub);
       supabase.removeChannel(channel);
@@ -182,11 +181,7 @@ export default function Home() {
   const sendRt = async () => {
     if (!rtInput.trim()) return;
     const dn = displayName || myName;
-    await supabase.from("messages").insert({
-      from_name: dn,
-      to_name: chatWith,
-      text: rtInput.trim(),
-    });
+    await supabase.from("messages").insert({ from_name: dn, to_name: chatWith, text: rtInput.trim() });
     setRtInput("");
   };
 
@@ -199,8 +194,7 @@ export default function Home() {
 
   const addProduct = async () => {
     if (!newProd.name.trim()) return;
-    const ownerName = displayName || myName;
-    await supabase.from("products").insert({ ...newProd, owner: ownerName });
+    await supabase.from("products").insert({ ...newProd, owner: displayName || myName });
     setNewProd({ name:"", price:"", description:"", emoji:"📦" });
     setShowAddProd(false);
   };
@@ -210,16 +204,14 @@ export default function Home() {
   };
 
   const dn = displayName || myName;
-
   const currentMsgs = dbMessages.filter(msg => {
     if (chatWith === null) return msg.to_name === null;
-    return (msg.from_name === dn && msg.to_name === chatWith) ||
-           (msg.from_name === chatWith && msg.to_name === dn);
+    return (msg.from_name === dn && msg.to_name === chatWith) || (msg.from_name === chatWith && msg.to_name === dn);
   });
 
   const totalUnread = Object.values(unread).reduce((a, b) => a + b, 0);
-  const blurAmount = Math.min(scrollY / 20, 10);
-  const parallax = scrollY * 0.35;
+  const parallax = scrollY * 0.3;
+  const blurAmount = Math.min(scrollY / 25, 8);
   const modes = ["Tous","✈️ Aérien","🚢 Maritime","🚛 Routier"];
 
   const filtered = agencies.filter(a => {
@@ -231,81 +223,108 @@ export default function Home() {
     return (b.featured ? 1 : 0) - (a.featured ? 1 : 0);
   });
 
-  // Admin data
   const adminAllUsers = [...new Set(dbMessages.flatMap(m => [m.from_name, m.to_name].filter(Boolean) as string[]))];
   const adminShopOwners = [...new Set(products.map(p => p.owner))];
   const adminClients = adminAllUsers.filter(u => !adminShopOwners.includes(u));
 
+  // Analytics
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const msgsThisMonth = dbMessages.filter(m => new Date(m.created_at) >= monthStart);
+  const msgsLastMonth = dbMessages.filter(m => { const d = new Date(m.created_at); return d >= prevMonthStart && d < monthStart; });
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const msgsByDay = Array.from({ length: daysInMonth }, (_, i) => ({ day: i + 1, count: msgsThisMonth.filter(m => new Date(m.created_at).getDate() === i + 1).length }));
+  const maxDay = Math.max(...msgsByDay.map(d => d.count), 1);
+  const destKeywords = ["Côte d'Ivoire","Cameroun","Sénégal","Mali","Guinée","Burkina Faso","Congo","Togo","Niger","Ghana","Nigéria","Gabon","Dakar","Abidjan","Mauritanie","Maroc","Casablanca","Rabat"];
+  const destCounts: Record<string, number> = {};
+  dbMessages.forEach(m => { destKeywords.forEach(dest => { if (m.text.toLowerCase().includes(dest.toLowerCase())) destCounts[dest] = (destCounts[dest] || 0) + 1; }); });
+  const topDests = Object.entries(destCounts).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const maxDest = Math.max(...topDests.map(d => d[1]), 1);
+  const boutiqueActivity = adminShopOwners.map(owner => ({ owner, messages: dbMessages.filter(m => m.from_name === owner || m.to_name === owner).length, products: products.filter(p => p.owner === owner).length })).sort((a, b) => b.messages - a.messages);
+  const maxBoutiqueMsg = Math.max(...boutiqueActivity.map(b => b.messages), 1);
+  const monthGrowth = msgsLastMonth.length > 0 ? Math.round(((msgsThisMonth.length - msgsLastMonth.length) / msgsLastMonth.length) * 100) : msgsThisMonth.length > 0 ? 100 : 0;
+
   const navTabs: Array<[string, string]> = [
-    ["agences","🏢 Agences"],
-    ["boutique","🏪 Boutique"],
-    ["comparateur","⚖️ Comparer"],
-    ["devis","📋 Devis"],
-    ["messages","💬 Messages"],
+    ["agences","Agences"],
+    ["boutique","Boutique"],
+    ["comparateur","Comparer"],
+    ["devis","Devis"],
+    ["messages","Messages"],
   ];
-  if (isOwner) navTabs.push(["admin","⚙️ Admin"]);
+  if (isOwner) navTabs.push(["admin","Admin"]);
+
+  const btnStyle = (active: boolean) => ({
+    padding:"8px 16px", borderRadius:6, fontSize:13, fontWeight:600, cursor:"pointer" as const,
+    border:"none", transition:"all 0.2s",
+    background: active ? G : "transparent",
+    color: active ? N1 : T3,
+    letterSpacing:"0.02em",
+  });
 
   return (
-    <main style={{ fontFamily:"'Segoe UI',system-ui,sans-serif", background:"#f1f5f9", minHeight:"100vh" }}>
+    <main style={{ fontFamily:"'Segoe UI',system-ui,sans-serif", background:BG, minHeight:"100vh" }}>
 
       {/* NAVBAR */}
-      <nav style={{ position:"fixed", top:0, left:0, right:0, zIndex:300, background:"rgba(8,16,32,0.93)", backdropFilter:"blur(20px)", borderBottom:"1px solid rgba(255,255,255,0.07)", height:62, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 1.5rem" }}>
-        <div style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }} onClick={() => { setTab("agences"); setMenuOpen(false); }}>
-          <div style={{ width:36, height:36, borderRadius:9, background:"linear-gradient(135deg,#22d3ee,#0ea5e9)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, fontSize:14, color:"#fff" }}>DM</div>
-          <span style={{ fontWeight:900, fontSize:18, color:"#fff", letterSpacing:-0.5 }}>DelivraMaroc</span>
-          <span style={{ fontSize:10, color:"#22d3ee", border:"1px solid rgba(34,211,238,0.35)", borderRadius:100, padding:"1px 7px" }}>BETA</span>
+      <nav style={{ position:"fixed", top:0, left:0, right:0, zIndex:300, background:N1, borderBottom:`1px solid rgba(201,168,76,0.15)`, height:64, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 2rem" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:12, cursor:"pointer" }} onClick={() => { setTab("agences"); setMenuOpen(false); }}>
+          <div style={{ width:38, height:38, borderRadius:8, background:`linear-gradient(135deg,${G},${GD})`, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, fontSize:14, color:N1, letterSpacing:"-0.5px" }}>DM</div>
+          <div>
+            <div style={{ fontWeight:800, fontSize:16, color:W, letterSpacing:"-0.3px", lineHeight:1 }}>DelivraMaroc</div>
+            <div style={{ fontSize:9, color:G, letterSpacing:"2px", fontWeight:700, textTransform:"uppercase" as const }}>Logistics Platform</div>
+          </div>
         </div>
-        <div style={{ display:"flex", gap:2, alignItems:"center" }} className="desktop-nav">
+        <div style={{ display:"flex", gap:1, alignItems:"center" }} className="desktop-nav">
           {navTabs.map(([key, label]) => (
-            <button key={key} onClick={() => { setTab(key as typeof tab); if(key==="messages") setUnread({}); }} style={{ padding:"7px 11px", borderRadius:8, fontSize:13, fontWeight:600, cursor:"pointer", border:"none", background:tab===key?"rgba(34,211,238,0.12)":"transparent", color:tab===key?"#22d3ee":"#94a3b8", position:"relative", transition:"all 0.2s" }}>
+            <button key={key} onClick={() => { setTab(key as typeof tab); if(key==="messages") setUnread({}); }} style={{ ...btnStyle(tab===key), position:"relative" }}>
               {label}
-              {key==="messages" && totalUnread>0 && <span style={{ position:"absolute", top:1, right:1, background:"#ef4444", color:"#fff", borderRadius:100, fontSize:8, fontWeight:700, padding:"1px 4px" }}>{totalUnread}</span>}
+              {key==="messages" && totalUnread>0 && <span style={{ position:"absolute", top:2, right:2, background:"#ef4444", color:W, borderRadius:100, fontSize:8, fontWeight:700, padding:"1px 4px" }}>{totalUnread}</span>}
             </button>
           ))}
           {myName && (
-            <div style={{ marginLeft:6, display:"flex", alignItems:"center", gap:6, background:"rgba(34,211,238,0.08)", border:"1px solid rgba(34,211,238,0.2)", borderRadius:8, padding:"5px 11px" }}>
+            <div style={{ marginLeft:12, display:"flex", alignItems:"center", gap:8, background:"rgba(201,168,76,0.08)", border:`1px solid rgba(201,168,76,0.2)`, borderRadius:6, padding:"5px 12px" }}>
               <span style={{ width:7, height:7, borderRadius:"50%", background:connected?"#22c55e":"#f59e0b", display:"inline-block" }}/>
-              <span style={{ fontSize:12, color:"#67e8f9", fontWeight:600 }}>{dn}{isOwner?" 👑":""}</span>
+              <span style={{ fontSize:12, color:G, fontWeight:700, letterSpacing:"0.02em" }}>{dn}{isOwner?" ★":""}</span>
             </div>
           )}
-          <button onClick={() => { setShowForm(true); setFormType("agence"); setFormStatus("idle"); }} style={{ marginLeft:6, background:"linear-gradient(135deg,#22d3ee,#0ea5e9)", color:"#fff", border:"none", borderRadius:8, padding:"8px 14px", fontSize:12, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>+ Inscrire agence</button>
+          <button onClick={() => { setShowForm(true); setFormType("agence"); setFormStatus("idle"); }} style={{ marginLeft:10, background:G, color:N1, border:"none", borderRadius:6, padding:"9px 18px", fontSize:12, fontWeight:800, cursor:"pointer", whiteSpace:"nowrap", letterSpacing:"0.03em" }}>INSCRIRE MON AGENCE</button>
         </div>
-        <button onClick={() => setMenuOpen(!menuOpen)} className="burger" style={{ display:"none", background:"transparent", border:"none", color:"#fff", fontSize:24, cursor:"pointer" }}>☰</button>
+        <button onClick={() => setMenuOpen(!menuOpen)} className="burger" style={{ display:"none", background:"transparent", border:`1px solid rgba(201,168,76,0.3)`, color:G, fontSize:18, cursor:"pointer", borderRadius:6, padding:"6px 10px" }}>☰</button>
       </nav>
 
       {menuOpen && (
-        <div style={{ position:"fixed", top:62, left:0, right:0, zIndex:299, background:"rgba(8,16,32,0.97)", backdropFilter:"blur(20px)", padding:"12px 1rem", display:"flex", flexDirection:"column" as const, gap:4 }}>
+        <div style={{ position:"fixed", top:64, left:0, right:0, zIndex:299, background:N1, borderBottom:`1px solid rgba(201,168,76,0.15)`, padding:"12px 1.5rem", display:"flex", flexDirection:"column" as const, gap:2 }}>
           {navTabs.map(([key, label]) => (
-            <button key={key} onClick={() => { setTab(key as typeof tab); setMenuOpen(false); }} style={{ padding:"12px 16px", borderRadius:8, fontSize:14, fontWeight:600, cursor:"pointer", border:"none", background:tab===key?"rgba(34,211,238,0.12)":"transparent", color:tab===key?"#22d3ee":"#94a3b8", textAlign:"left" as const }}>{label}</button>
+            <button key={key} onClick={() => { setTab(key as typeof tab); setMenuOpen(false); }} style={{ ...btnStyle(tab===key), textAlign:"left" as const, padding:"12px 16px" }}>{label}</button>
           ))}
         </div>
       )}
 
       {/* HERO */}
       {tab==="agences" && (
-        <section ref={heroRef} style={{ position:"relative", minHeight:600, display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", color:"#fff", textAlign:"center" }}>
-          <div style={{ position:"absolute", inset:"-25%", transform:`translateY(${parallax}px)`, filter:`blur(${blurAmount}px)`, transition:"filter 0.1s ease", willChange:"transform,filter" }}>
+        <section ref={heroRef} style={{ position:"relative", minHeight:620, display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", color:W, textAlign:"center" }}>
+          <div style={{ position:"absolute", inset:"-25%", transform:`translateY(${parallax}px)`, filter:`blur(${blurAmount}px)`, transition:"filter 0.1s", willChange:"transform,filter" }}>
             <Image src="/hero.png" alt="DelivraMaroc" fill priority style={{ objectFit:"cover", objectPosition:"center" }}/>
           </div>
-          <div style={{ position:"absolute", inset:0, background:"linear-gradient(180deg,rgba(3,8,20,0.70) 0%,rgba(3,8,20,0.50) 40%,rgba(3,8,20,0.88) 100%)" }}/>
-          <div style={{ position:"absolute", inset:0, backgroundImage:"linear-gradient(rgba(34,211,238,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(34,211,238,0.03) 1px,transparent 1px)", backgroundSize:"60px 60px", pointerEvents:"none" }}/>
-          <div style={{ position:"relative", maxWidth:820, padding:"140px 2rem 100px", zIndex:10 }}>
-            <div style={{ display:"inline-flex", alignItems:"center", gap:8, background:"rgba(34,211,238,0.10)", border:"1px solid rgba(34,211,238,0.28)", borderRadius:100, padding:"6px 18px", fontSize:13, fontWeight:600, color:"#67e8f9", marginBottom:24, backdropFilter:"blur(10px)" }}>
-              <span style={{ width:6, height:6, borderRadius:"50%", background:"#22d3ee", display:"inline-block", boxShadow:"0 0 8px #22d3ee" }}/>
-              🇲🇦 La 1ère plateforme livraison Maroc–Afrique
+          <div style={{ position:"absolute", inset:0, background:`linear-gradient(180deg,rgba(10,15,30,0.82) 0%,rgba(10,15,30,0.55) 40%,rgba(10,15,30,0.92) 100%)` }}/>
+          <div style={{ position:"absolute", inset:0, backgroundImage:"linear-gradient(rgba(201,168,76,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(201,168,76,0.04) 1px,transparent 1px)", backgroundSize:"80px 80px", pointerEvents:"none" }}/>
+          <div style={{ position:"relative", maxWidth:860, padding:"150px 2rem 110px", zIndex:10 }}>
+            <div style={{ display:"inline-flex", alignItems:"center", gap:8, background:"rgba(201,168,76,0.10)", border:`1px solid rgba(201,168,76,0.30)`, borderRadius:4, padding:"6px 16px", fontSize:11, fontWeight:700, color:GL, marginBottom:28, backdropFilter:"blur(10px)", letterSpacing:"2px", textTransform:"uppercase" as const }}>
+              <span style={{ width:5, height:5, borderRadius:"50%", background:G, display:"inline-block" }}/>
+              Plateforme Logistique · Maroc — Afrique
             </div>
-            <h1 style={{ fontSize:"clamp(2.2rem,5.5vw,4rem)", fontWeight:900, margin:"0 0 6px", lineHeight:1.06, letterSpacing:-2, textShadow:"0 2px 24px rgba(0,0,0,0.6)" }}>Connectez-vous aux</h1>
-            <h1 style={{ fontSize:"clamp(2.2rem,5.5vw,4rem)", fontWeight:900, margin:"0 0 22px", lineHeight:1.06, letterSpacing:-2, color:"#22d3ee", textShadow:"0 0 50px rgba(34,211,238,0.4)" }}>meilleures agences de livraison</h1>
-            <p style={{ fontSize:17, color:"rgba(255,255,255,0.72)", lineHeight:1.7, maxWidth:560, margin:"0 auto 44px", textShadow:"0 1px 8px rgba(0,0,0,0.5)" }}>Comparez les tarifs · Chattez en direct · Envoyez vos colis vers l&apos;Afrique</p>
-            <div style={{ display:"flex", maxWidth:660, margin:"0 auto 48px", borderRadius:14, overflow:"hidden", boxShadow:"0 16px 48px rgba(0,0,0,0.55)", border:"1px solid rgba(34,211,238,0.18)" }}>
-              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍  Destination, pays, type de colis..." style={{ flex:1, padding:"18px 22px", border:"none", fontSize:15, outline:"none", background:"rgba(255,255,255,0.97)", color:"#0f172a" }} onKeyDown={e=>{if(e.key==="Enter")setTab("comparateur");}}/>
-              <button onClick={()=>setTab("comparateur")} style={{ background:"linear-gradient(135deg,#22d3ee,#0369a1)", color:"#fff", border:"none", padding:"18px 30px", fontSize:15, fontWeight:800, cursor:"pointer", whiteSpace:"nowrap" }}>COMPARER →</button>
+            <h1 style={{ fontSize:"clamp(2.4rem,5vw,4.2rem)", fontWeight:900, margin:"0 0 8px", lineHeight:1.05, letterSpacing:"-2px" }}>La référence de la livraison</h1>
+            <h1 style={{ fontSize:"clamp(2.4rem,5vw,4.2rem)", fontWeight:900, margin:"0 0 24px", lineHeight:1.05, letterSpacing:"-2px", color:G }}>Maroc — Afrique</h1>
+            <p style={{ fontSize:16, color:"rgba(255,255,255,0.65)", lineHeight:1.8, maxWidth:540, margin:"0 auto 48px", fontWeight:400 }}>Comparez les meilleures agences · Négociez vos tarifs · Expédiez en toute confiance</p>
+            <div style={{ display:"flex", maxWidth:640, margin:"0 auto 52px", borderRadius:8, overflow:"hidden", boxShadow:"0 20px 60px rgba(0,0,0,0.5)", border:`1px solid rgba(201,168,76,0.2)` }}>
+              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Destination, pays, type de colis..." style={{ flex:1, padding:"18px 24px", border:"none", fontSize:14, outline:"none", background:W, color:T1, fontWeight:500 }} onKeyDown={e=>{if(e.key==="Enter")setTab("comparateur");}}/>
+              <button onClick={()=>setTab("comparateur")} style={{ background:G, color:N1, border:"none", padding:"18px 28px", fontSize:13, fontWeight:800, cursor:"pointer", whiteSpace:"nowrap", letterSpacing:"1px" }}>COMPARER →</button>
             </div>
-            <div style={{ display:"flex", justifyContent:"center", gap:"2.5rem", flexWrap:"wrap" }}>
-              {[{v:"7+",l:"Agences"},{v:"20+",l:"Pays"},{v:"3",l:"Modes"},{v:`${onlineUsers.length+1}`,l:"En ligne"}].map(s=>(
+            <div style={{ display:"flex", justifyContent:"center", gap:"3rem", flexWrap:"wrap" }}>
+              {[{v:"7+",l:"Agences partenaires"},{v:"20+",l:"Pays desservis"},{v:"3",l:"Modes de transport"},{v:`${onlineUsers.length+1}`,l:"Utilisateurs en ligne"}].map(s=>(
                 <div key={s.l} style={{ textAlign:"center" }}>
-                  <div style={{ fontSize:30, fontWeight:900, color:"#22d3ee", lineHeight:1 }}>{s.v}</div>
-                  <div style={{ fontSize:10, color:"rgba(255,255,255,0.45)", fontWeight:700, letterSpacing:1, textTransform:"uppercase", marginTop:6 }}>{s.l}</div>
+                  <div style={{ fontSize:32, fontWeight:900, color:G, lineHeight:1, letterSpacing:"-1px" }}>{s.v}</div>
+                  <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)", fontWeight:600, letterSpacing:"1.5px", textTransform:"uppercase", marginTop:8 }}>{s.l}</div>
                 </div>
               ))}
             </div>
@@ -313,66 +332,68 @@ export default function Home() {
         </section>
       )}
 
-      <div style={{ maxWidth:1200, margin:"0 auto", padding:tab==="agences"?"32px 1.5rem":"82px 1.5rem 32px" }}>
+      <div style={{ maxWidth:1240, margin:"0 auto", padding:tab==="agences"?"32px 1.5rem":"88px 1.5rem 40px" }}>
 
         {/* AGENCES */}
         {tab==="agences" && (
           <>
-            <div style={{ display:"flex", gap:8, justifyContent:"center", marginBottom:28, flexWrap:"wrap" }}>
-              {modes.map(m=><button key={m} onClick={()=>setModeFilter(m)} style={{ padding:"8px 18px", borderRadius:100, fontSize:13, fontWeight:600, cursor:"pointer", border:"2px solid", background:modeFilter===m?"#0ea5e9":"#fff", color:modeFilter===m?"#fff":"#475569", borderColor:modeFilter===m?"#0ea5e9":"#e2e8f0", transition:"all 0.2s" }}>{m}</button>)}
+            <div style={{ display:"flex", gap:8, justifyContent:"center", marginBottom:32, flexWrap:"wrap" }}>
+              {modes.map(m=>(
+                <button key={m} onClick={()=>setModeFilter(m)} style={{ padding:"9px 20px", borderRadius:6, fontSize:12, fontWeight:700, cursor:"pointer", border:`1.5px solid`, background:modeFilter===m?G:W, color:modeFilter===m?N1:T2, borderColor:modeFilter===m?G:BORDER, transition:"all 0.2s", letterSpacing:"0.5px" }}>{m}</button>
+              ))}
             </div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))", gap:22 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(360px,1fr))", gap:24 }}>
               {filtered.map(ag=>(
-                <div key={ag.id} style={{ background:"#fff", borderRadius:20, border:ag.featured?"2px solid #0ea5e9":"1px solid #e2e8f0", overflow:"hidden", boxShadow:ag.featured?"0 4px 24px rgba(14,165,233,0.12)":"0 2px 12px rgba(0,0,0,0.05)", transition:"all 0.25s" }}
-                  onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.transform="translateY(-5px)";(e.currentTarget as HTMLElement).style.boxShadow="0 20px 48px rgba(0,0,0,0.12)";}}
-                  onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.transform="translateY(0)";(e.currentTarget as HTMLElement).style.boxShadow=ag.featured?"0 4px 24px rgba(14,165,233,0.12)":"0 2px 12px rgba(0,0,0,0.05)";}}>
-                  {ag.featured && <div style={{ background:"linear-gradient(90deg,#0ea5e9,#0369a1)", color:"#fff", fontSize:10, fontWeight:700, textAlign:"center", padding:"5px", letterSpacing:1 }}>⭐ AGENCE RECOMMANDÉE</div>}
-                  <div style={{ background:ag.bg, padding:"18px 20px", borderBottom:"1px solid #f1f5f9", display:"flex", gap:14, alignItems:"center" }}>
-                    <div style={{ width:50, height:50, borderRadius:14, background:ag.color, display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:900, fontSize:16, flexShrink:0 }}>{ag.logo}</div>
+                <div key={ag.id} style={{ background:W, borderRadius:12, border:`1px solid ${ag.featured?G:BORDER}`, overflow:"hidden", boxShadow:ag.featured?`0 4px 24px rgba(201,168,76,0.12)`:"0 2px 12px rgba(0,0,0,0.04)", transition:"all 0.25s" }}
+                  onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.transform="translateY(-4px)";(e.currentTarget as HTMLElement).style.boxShadow="0 16px 48px rgba(0,0,0,0.10)";}}
+                  onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.transform="translateY(0)";(e.currentTarget as HTMLElement).style.boxShadow=ag.featured?`0 4px 24px rgba(201,168,76,0.12)`:"0 2px 12px rgba(0,0,0,0.04)";}}>
+                  {ag.featured && <div style={{ background:`linear-gradient(90deg,${N2},${N3})`, color:G, fontSize:9, fontWeight:800, textAlign:"center", padding:"6px", letterSpacing:"2px", textTransform:"uppercase" as const, borderBottom:`1px solid rgba(201,168,76,0.2)` }}>★ PARTENAIRE PREMIUM</div>}
+                  <div style={{ padding:"20px 22px", borderBottom:`1px solid ${BG}`, display:"flex", gap:16, alignItems:"center" }}>
+                    <div style={{ width:52, height:52, borderRadius:10, background:ag.color, display:"flex", alignItems:"center", justifyContent:"center", color:W, fontWeight:900, fontSize:16, flexShrink:0, letterSpacing:"-0.5px" }}>{ag.logo}</div>
                     <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap", marginBottom:2 }}>
-                        <span style={{ fontWeight:800, fontSize:15, color:"#0f172a" }}>{ag.name}</span>
-                        {ag.verified && <span style={{ background:"#dcfce7", color:"#166534", fontSize:9, fontWeight:700, padding:"1px 6px", borderRadius:100 }}>✓ Vérifié</span>}
-                        <span style={{ background:ag.color, color:"#fff", fontSize:9, fontWeight:700, padding:"1px 7px", borderRadius:100 }}>{ag.badge}</span>
+                      <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap", marginBottom:3 }}>
+                        <span style={{ fontWeight:800, fontSize:15, color:T1 }}>{ag.name}</span>
+                        {ag.verified && <span style={{ background:"#f0fdf4", color:"#166534", fontSize:9, fontWeight:700, padding:"2px 7px", borderRadius:4, letterSpacing:"0.5px" }}>✓ VÉRIFIÉ</span>}
+                        <span style={{ background:N1, color:G, fontSize:9, fontWeight:700, padding:"2px 8px", borderRadius:4, letterSpacing:"1px" }}>{ag.badge}</span>
                       </div>
-                      <div style={{ fontSize:11, color:"#64748b", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{ag.slogan}</div>
+                      <div style={{ fontSize:11, color:T2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{ag.slogan}</div>
                     </div>
                   </div>
-                  <div style={{ padding:"16px 20px" }}>
+                  <div style={{ padding:"18px 22px" }}>
                     <Stars n={ag.note} avis={ag.avis}/>
-                    <p style={{ fontSize:12, color:"#64748b", margin:"10px 0", lineHeight:1.5 }}>{ag.description}</p>
-                    <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:10 }}>
-                      {ag.modes.map(m=><span key={m} style={{ background:"#f1f5f9", color:"#475569", fontSize:11, padding:"3px 9px", borderRadius:100, fontWeight:600 }}>{m}</span>)}
+                    <p style={{ fontSize:12, color:T2, margin:"10px 0", lineHeight:1.6 }}>{ag.description}</p>
+                    <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:12 }}>
+                      {ag.modes.map(m=><span key={m} style={{ background:BG, color:T2, fontSize:11, padding:"4px 10px", borderRadius:4, fontWeight:600, border:`1px solid ${BORDER}` }}>{m}</span>)}
                     </div>
-                    <div style={{ marginBottom:10 }}>
-                      <div style={{ fontSize:10, fontWeight:700, color:"#94a3b8", marginBottom:5, textTransform:"uppercase" as const, letterSpacing:0.6 }}>Destinations</div>
+                    <div style={{ marginBottom:12 }}>
+                      <div style={{ fontSize:10, fontWeight:700, color:T3, marginBottom:6, textTransform:"uppercase" as const, letterSpacing:"1px" }}>Destinations</div>
                       <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
-                        {ag.destinations.slice(0,4).map(d=><span key={d} style={{ background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", fontSize:10, padding:"2px 7px", borderRadius:5 }}>{d}</span>)}
-                        {ag.destinations.length>4 && <span style={{ background:ag.color, color:"#fff", fontSize:10, padding:"2px 7px", borderRadius:5, fontWeight:700 }}>+{ag.destinations.length-4} pays</span>}
+                        {ag.destinations.slice(0,4).map(d=><span key={d} style={{ background:BG, border:`1px solid ${BORDER}`, color:T2, fontSize:10, padding:"2px 8px", borderRadius:4 }}>{d}</span>)}
+                        {ag.destinations.length>4 && <span style={{ background:N1, color:G, fontSize:10, padding:"2px 8px", borderRadius:4, fontWeight:700 }}>+{ag.destinations.length-4} pays</span>}
                       </div>
                     </div>
-                    {ag.adresse && <div style={{ display:"flex", gap:5, alignItems:"flex-start", marginBottom:6 }}><span>📍</span><span style={{ fontSize:11, color:"#64748b" }}>{ag.adresse}</span></div>}
-                    {ag.horaires && <div style={{ display:"flex", gap:5, alignItems:"center", marginBottom:10 }}><span>🕐</span><span style={{ fontSize:11, color:"#64748b" }}>{ag.horaires}</span></div>}
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
-                      <div style={{ background:"#f8fafc", borderRadius:10, padding:"10px", textAlign:"center" as const }}><div style={{ fontSize:9, color:"#94a3b8", fontWeight:700, marginBottom:3, textTransform:"uppercase" as const }}>Tarif</div><div style={{ fontSize:13, fontWeight:800, color:ag.color }}>{ag.prix_kg}</div></div>
-                      <div style={{ background:"#f8fafc", borderRadius:10, padding:"10px", textAlign:"center" as const }}><div style={{ fontSize:9, color:"#94a3b8", fontWeight:700, marginBottom:3, textTransform:"uppercase" as const }}>Délai</div><div style={{ fontSize:12, fontWeight:700, color:"#0f172a" }}>{ag.delai}</div></div>
+                    {ag.adresse && <div style={{ display:"flex", gap:6, alignItems:"flex-start", marginBottom:6 }}><span style={{ color:T3 }}>📍</span><span style={{ fontSize:11, color:T2 }}>{ag.adresse}</span></div>}
+                    {ag.horaires && <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:12 }}><span style={{ color:T3 }}>🕐</span><span style={{ fontSize:11, color:T2 }}>{ag.horaires}</span></div>}
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
+                      <div style={{ background:BG, borderRadius:8, padding:"12px", textAlign:"center" as const, border:`1px solid ${BORDER}` }}><div style={{ fontSize:9, color:T3, fontWeight:700, marginBottom:4, textTransform:"uppercase" as const, letterSpacing:"1px" }}>Tarif/kg</div><div style={{ fontSize:14, fontWeight:800, color:G }}>{ag.prix_kg}</div></div>
+                      <div style={{ background:BG, borderRadius:8, padding:"12px", textAlign:"center" as const, border:`1px solid ${BORDER}` }}><div style={{ fontSize:9, color:T3, fontWeight:700, marginBottom:4, textTransform:"uppercase" as const, letterSpacing:"1px" }}>Délai</div><div style={{ fontSize:12, fontWeight:700, color:T1 }}>{ag.delai}</div></div>
                     </div>
-                    <button onClick={()=>setShowTarifs(showTarifs===ag.id?null:ag.id)} style={{ width:"100%", padding:"8px", borderRadius:8, border:`1px solid ${ag.color}33`, color:ag.color, background:`${ag.color}08`, fontSize:12, fontWeight:600, cursor:"pointer", marginBottom:10 }}>{showTarifs===ag.id?"▲ Masquer":"📊 Grille tarifaire"}</button>
+                    <button onClick={()=>setShowTarifs(showTarifs===ag.id?null:ag.id)} style={{ width:"100%", padding:"9px", borderRadius:6, border:`1px solid ${BORDER}`, color:T2, background:BG, fontSize:12, fontWeight:600, cursor:"pointer", marginBottom:12, letterSpacing:"0.3px" }}>{showTarifs===ag.id?"▲ Masquer les tarifs":"▼ Grille tarifaire complète"}</button>
                     {showTarifs===ag.id && (
-                      <div style={{ marginBottom:12, borderRadius:10, overflow:"hidden", border:"1px solid #e2e8f0" }}>
+                      <div style={{ marginBottom:14, borderRadius:8, overflow:"hidden", border:`1px solid ${BORDER}` }}>
                         <table style={{ width:"100%", borderCollapse:"collapse" as const, fontSize:11 }}>
-                          <thead><tr style={{ background:ag.color }}><th style={{ padding:"7px 10px", textAlign:"left" as const, color:"#fff" }}>Service</th><th style={{ padding:"7px 10px", textAlign:"center" as const, color:"#fff" }}>Prix</th><th style={{ padding:"7px 10px", textAlign:"center" as const, color:"#fff" }}>Délai</th></tr></thead>
-                          <tbody>{ag.tarifs.map((t,i)=><tr key={i} style={{ background:i%2===0?"#f8fafc":"#fff", borderTop:"1px solid #f1f5f9" }}><td style={{ padding:"6px 10px", color:"#334155" }}>{t.article}</td><td style={{ padding:"6px 10px", textAlign:"center" as const, color:ag.color, fontWeight:700 }}>{t.prix}</td><td style={{ padding:"6px 10px", textAlign:"center" as const, color:"#64748b" }}>{t.delai}</td></tr>)}</tbody>
+                          <thead><tr style={{ background:N1 }}><th style={{ padding:"8px 12px", textAlign:"left" as const, color:G, fontWeight:700, letterSpacing:"0.5px" }}>Service</th><th style={{ padding:"8px 12px", textAlign:"center" as const, color:G, fontWeight:700 }}>Prix</th><th style={{ padding:"8px 12px", textAlign:"center" as const, color:G, fontWeight:700 }}>Délai</th></tr></thead>
+                          <tbody>{ag.tarifs.map((t,i)=><tr key={i} style={{ background:i%2===0?BG:W, borderTop:`1px solid ${BORDER}` }}><td style={{ padding:"7px 12px", color:T1 }}>{t.article}</td><td style={{ padding:"7px 12px", textAlign:"center" as const, color:G, fontWeight:700 }}>{t.prix}</td><td style={{ padding:"7px 12px", textAlign:"center" as const, color:T2 }}>{t.delai}</td></tr>)}</tbody>
                         </table>
-                        {ag.specials.length>0 && <div style={{ padding:"10px", background:"#fffbeb", borderTop:"1px solid #fde68a" }}><div style={{ fontSize:10, fontWeight:700, color:"#92400e", marginBottom:6 }}>⚠️ Tarifs spéciaux :</div><div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>{ag.specials.map((s,i)=><span key={i} style={{ background:"#fff", border:"1px solid #fcd34d", color:"#92400e", fontSize:10, padding:"2px 7px", borderRadius:5 }}>{typeof s==="string"?s:`${s.nom} : ${s.prix}`}</span>)}</div></div>}
+                        {ag.specials.length>0 && <div style={{ padding:"10px 12px", background:"#fffbeb", borderTop:`1px solid #fde68a` }}><div style={{ fontSize:10, fontWeight:700, color:"#92400e", marginBottom:6, letterSpacing:"0.5px" }}>⚠ TARIFS SPÉCIAUX</div><div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>{ag.specials.map((s,i)=><span key={i} style={{ background:W, border:"1px solid #fcd34d", color:"#92400e", fontSize:10, padding:"2px 7px", borderRadius:4 }}>{typeof s==="string"?s:`${s.nom} : ${s.prix}`}</span>)}</div></div>}
                       </div>
                     )}
                     {ag.contacts.slice(0,2).map((c,i)=>(
-                      <a key={i} href={`tel:${c.tel}`} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", textDecoration:"none", padding:"8px 12px", borderRadius:8, fontSize:11, marginBottom:5 }}>
-                        <span style={{ color:"#94a3b8" }}>📞 {c.label}</span><span style={{ fontWeight:700 }}>{c.tel}</span>
+                      <a key={i} href={`tel:${c.tel}`} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:BG, border:`1px solid ${BORDER}`, color:T1, textDecoration:"none", padding:"9px 14px", borderRadius:6, fontSize:11, marginBottom:6, transition:"all 0.2s" }}>
+                        <span style={{ color:T3, fontWeight:600 }}>📞 {c.label}</span><span style={{ fontWeight:800, color:T1 }}>{c.tel}</span>
                       </a>
                     ))}
-                    {ag.contacts.length>2 && <div style={{ fontSize:10, color:"#94a3b8", textAlign:"center" as const, padding:"3px" }}>+{ag.contacts.length-2} autres contacts</div>}
+                    {ag.contacts.length>2 && <div style={{ fontSize:10, color:T3, textAlign:"center" as const, padding:"4px" }}>+{ag.contacts.length-2} contacts supplémentaires</div>}
                   </div>
                 </div>
               ))}
@@ -383,57 +404,57 @@ export default function Home() {
         {/* BOUTIQUE */}
         {tab==="boutique" && (
           <div>
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:24, flexWrap:"wrap", gap:12 }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:28, flexWrap:"wrap", gap:12 }}>
               <div>
-                <h2 style={{ fontSize:24, fontWeight:800, color:"#0f172a", margin:0 }}>🏪 {isOwner ? (shopName || myName) : "Boutique"}</h2>
-                <p style={{ color:"#64748b", fontSize:13, margin:"4px 0 0" }}>{isOwner?"Gérez vos produits · Vos clients vous contactent en direct":"Contactez le vendeur directement via la messagerie"}</p>
+                <h2 style={{ fontSize:26, fontWeight:800, color:T1, margin:0, letterSpacing:"-0.5px" }}>{isOwner ? (shopName || myName) : "Boutique"}</h2>
+                <p style={{ color:T2, fontSize:13, margin:"5px 0 0" }}>{isOwner?"Gérez vos produits · Vos clients vous contactent directement":"Parcourez les produits disponibles"}</p>
               </div>
               {isOwner && (
                 <div style={{ display:"flex", gap:8 }}>
-                  <button onClick={()=>setShowShopEdit(true)} style={{ background:"#f1f5f9", color:"#475569", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 16px", fontSize:13, fontWeight:600, cursor:"pointer" }}>✏️ Nom boutique</button>
-                  <button onClick={()=>setShowAddProd(true)} style={{ background:"linear-gradient(135deg,#22d3ee,#0ea5e9)", color:"#fff", border:"none", borderRadius:10, padding:"10px 20px", fontSize:13, fontWeight:700, cursor:"pointer" }}>＋ Ajouter un produit</button>
+                  <button onClick={()=>setShowShopEdit(true)} style={{ background:W, color:T2, border:`1px solid ${BORDER}`, borderRadius:6, padding:"10px 16px", fontSize:12, fontWeight:600, cursor:"pointer" }}>✏ Nom boutique</button>
+                  <button onClick={()=>setShowAddProd(true)} style={{ background:G, color:N1, border:"none", borderRadius:6, padding:"10px 20px", fontSize:12, fontWeight:800, cursor:"pointer", letterSpacing:"0.5px" }}>+ AJOUTER UN PRODUIT</button>
                 </div>
               )}
             </div>
 
             {isOwner && (
-              <div style={{ background:"linear-gradient(135deg,#0f172a,#1e3a5f)", borderRadius:16, padding:"20px 24px", marginBottom:28, display:"flex", alignItems:"center", gap:16, flexWrap:"wrap" }}>
-                <div style={{ fontSize:32 }}>👑</div>
+              <div style={{ background:N2, borderRadius:10, padding:"20px 24px", marginBottom:28, display:"flex", alignItems:"center", gap:16, flexWrap:"wrap", border:`1px solid rgba(201,168,76,0.2)` }}>
+                <div style={{ width:44, height:44, borderRadius:8, background:`linear-gradient(135deg,${G},${GD})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>★</div>
                 <div style={{ flex:1 }}>
-                  <div style={{ color:"#22d3ee", fontWeight:800, fontSize:15 }}>Mode Propriétaire · {dn}</div>
-                  <div style={{ color:"#64748b", fontSize:12, marginTop:3 }}>Nom affiché dans le chat : <strong style={{ color:"#67e8f9" }}>{dn}</strong> · {onlineUsers.length} visiteur(s) connecté(s)</div>
+                  <div style={{ color:G, fontWeight:800, fontSize:14, letterSpacing:"0.3px" }}>Mode Propriétaire · {dn}</div>
+                  <div style={{ color:T3, fontSize:12, marginTop:3 }}>Nom dans le chat : <strong style={{ color:GL }}>{dn}</strong> · {onlineUsers.length} visiteur(s) connecté(s)</div>
                 </div>
                 <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
                   {onlineUsers.map(u=>(
-                    <button key={u} onClick={()=>openChat(u)} style={{ background:"rgba(34,211,238,0.1)", border:"1px solid rgba(34,211,238,0.25)", color:"#67e8f9", borderRadius:8, padding:"6px 12px", fontSize:12, cursor:"pointer", fontWeight:600 }}>💬 {u}</button>
+                    <button key={u} onClick={()=>openChat(u)} style={{ background:"rgba(201,168,76,0.1)", border:`1px solid rgba(201,168,76,0.25)`, color:GL, borderRadius:6, padding:"7px 14px", fontSize:12, cursor:"pointer", fontWeight:600 }}>✉ {u}</button>
                   ))}
                 </div>
               </div>
             )}
 
             {products.length===0 ? (
-              <div style={{ textAlign:"center", padding:"80px 20px", color:"#94a3b8" }}>
-                <div style={{ fontSize:64, marginBottom:16 }}>🏪</div>
-                <div style={{ fontSize:18, fontWeight:700, color:"#64748b", marginBottom:8 }}>{isOwner?"Votre boutique est vide":"La boutique est vide pour l'instant"}</div>
-                <div style={{ fontSize:13 }}>{isOwner?"Cliquez sur « Ajouter un produit » pour commencer":"Revenez bientôt !"}</div>
+              <div style={{ textAlign:"center", padding:"80px 20px", color:T3 }}>
+                <div style={{ fontSize:56, marginBottom:16, opacity:0.4 }}>🛍</div>
+                <div style={{ fontSize:18, fontWeight:700, color:T2, marginBottom:8 }}>{isOwner?"Votre boutique est vide":"Boutique vide pour l'instant"}</div>
+                <div style={{ fontSize:13 }}>{isOwner?"Ajoutez votre premier produit":"Revenez bientôt !"}</div>
               </div>
             ) : (
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:20 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(270px,1fr))", gap:22 }}>
                 {products.map(p=>(
-                  <div key={p.id} style={{ background:"#fff", borderRadius:18, overflow:"hidden", border:"1px solid #e2e8f0", boxShadow:"0 2px 12px rgba(0,0,0,0.05)", transition:"all 0.25s" }}
-                    onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.transform="translateY(-4px)";(e.currentTarget as HTMLElement).style.boxShadow="0 16px 40px rgba(0,0,0,0.10)";}}
-                    onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.transform="translateY(0)";(e.currentTarget as HTMLElement).style.boxShadow="0 2px 12px rgba(0,0,0,0.05)";}}>
-                    <div style={{ background:"linear-gradient(135deg,#f0f9ff,#e0f2fe)", height:130, display:"flex", alignItems:"center", justifyContent:"center", fontSize:60 }}>{p.emoji}</div>
-                    <div style={{ padding:"16px" }}>
-                      <div style={{ fontWeight:800, fontSize:16, color:"#0f172a", marginBottom:2 }}>{p.name}</div>
-                      <div style={{ fontSize:11, color:"#94a3b8", marginBottom:6 }}>par {p.owner}</div>
-                      {p.description && <div style={{ fontSize:12, color:"#64748b", marginBottom:10, lineHeight:1.5 }}>{p.description}</div>}
-                      {p.price && <div style={{ fontSize:20, fontWeight:900, color:"#0ea5e9", marginBottom:12 }}>{p.price}</div>}
+                  <div key={p.id} style={{ background:W, borderRadius:12, overflow:"hidden", border:`1px solid ${BORDER}`, boxShadow:"0 2px 12px rgba(0,0,0,0.04)", transition:"all 0.25s" }}
+                    onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.transform="translateY(-3px)";(e.currentTarget as HTMLElement).style.boxShadow="0 12px 36px rgba(0,0,0,0.08)";}}
+                    onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.transform="translateY(0)";(e.currentTarget as HTMLElement).style.boxShadow="0 2px 12px rgba(0,0,0,0.04)";}}>
+                    <div style={{ background:`linear-gradient(135deg,${BG},#eaecf0)`, height:120, display:"flex", alignItems:"center", justifyContent:"center", fontSize:52 }}>{p.emoji}</div>
+                    <div style={{ padding:"16px 18px" }}>
+                      <div style={{ fontWeight:800, fontSize:15, color:T1, marginBottom:2 }}>{p.name}</div>
+                      <div style={{ fontSize:10, color:T3, marginBottom:6, fontWeight:600, letterSpacing:"0.5px", textTransform:"uppercase" as const }}>par {p.owner}</div>
+                      {p.description && <div style={{ fontSize:12, color:T2, marginBottom:10, lineHeight:1.6 }}>{p.description}</div>}
+                      {p.price && <div style={{ fontSize:22, fontWeight:900, color:G, marginBottom:14, letterSpacing:"-0.5px" }}>{p.price}</div>}
                       {isOwner ? (
-                        <button onClick={()=>deleteProduct(p.id)} style={{ width:"100%", padding:"9px", borderRadius:8, border:"1px solid #fecaca", background:"#fef2f2", color:"#dc2626", fontSize:12, fontWeight:600, cursor:"pointer" }}>🗑️ Supprimer</button>
+                        <button onClick={()=>deleteProduct(p.id)} style={{ width:"100%", padding:"9px", borderRadius:6, border:`1px solid #fecaca`, background:"#fef2f2", color:"#dc2626", fontSize:12, fontWeight:600, cursor:"pointer" }}>Supprimer</button>
                       ) : (
-                        <button onClick={()=>{ openChat(p.owner); setTimeout(()=>{},200); }} style={{ width:"100%", padding:"10px", borderRadius:10, border:"none", background:"linear-gradient(135deg,#0ea5e9,#0369a1)", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>
-                          💬 Contacter {p.owner}
+                        <button onClick={()=>openChat(p.owner)} style={{ width:"100%", padding:"11px", borderRadius:6, border:"none", background:N1, color:G, fontSize:12, fontWeight:800, cursor:"pointer", letterSpacing:"0.5px" }}>
+                          CONTACTER {p.owner.toUpperCase()}
                         </button>
                       )}
                     </div>
@@ -447,35 +468,35 @@ export default function Home() {
         {/* COMPARATEUR */}
         {tab==="comparateur" && (
           <div>
-            <h2 style={{ fontSize:22, fontWeight:800, color:"#0f172a", marginBottom:20, marginTop:0 }}>⚖️ Comparateur d&apos;agences</h2>
-            <div style={{ background:"#fff", borderRadius:14, padding:"16px", marginBottom:20, border:"1px solid #e2e8f0", display:"flex", gap:10, flexWrap:"wrap", alignItems:"center" }}>
-              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Destination ou pays..." style={{ flex:1, minWidth:180, padding:"9px 14px", borderRadius:9, border:"1px solid #e2e8f0", fontSize:13, outline:"none" }}/>
-              {modes.map(m=><button key={m} onClick={()=>setModeFilter(m)} style={{ padding:"7px 13px", borderRadius:100, fontSize:12, fontWeight:600, cursor:"pointer", border:"2px solid", background:modeFilter===m?"#0ea5e9":"#fff", color:modeFilter===m?"#fff":"#475569", borderColor:modeFilter===m?"#0ea5e9":"#e2e8f0" }}>{m}</button>)}
-              <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{ padding:"8px 12px", borderRadius:9, border:"1px solid #e2e8f0", fontSize:12, outline:"none", background:"#fff", cursor:"pointer" }}>
-                <option value="featured">⭐ Recommandés</option>
-                <option value="prix">💰 Meilleur prix</option>
-                <option value="note">⭐ Meilleures notes</option>
+            <h2 style={{ fontSize:24, fontWeight:800, color:T1, marginBottom:22, marginTop:0, letterSpacing:"-0.5px" }}>Comparateur d&apos;agences</h2>
+            <div style={{ background:W, borderRadius:10, padding:"16px 20px", marginBottom:22, border:`1px solid ${BORDER}`, display:"flex", gap:10, flexWrap:"wrap", alignItems:"center" }}>
+              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Destination, pays..." style={{ flex:1, minWidth:180, padding:"10px 16px", borderRadius:6, border:`1px solid ${BORDER}`, fontSize:13, outline:"none", color:T1 }}/>
+              {modes.map(m=><button key={m} onClick={()=>setModeFilter(m)} style={{ padding:"8px 14px", borderRadius:6, fontSize:12, fontWeight:700, cursor:"pointer", border:`1.5px solid`, background:modeFilter===m?G:W, color:modeFilter===m?N1:T2, borderColor:modeFilter===m?G:BORDER }}>{m}</button>)}
+              <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{ padding:"9px 14px", borderRadius:6, border:`1px solid ${BORDER}`, fontSize:12, outline:"none", background:W, cursor:"pointer", color:T1, fontWeight:600 }}>
+                <option value="featured">★ Recommandés</option>
+                <option value="prix">Meilleur prix</option>
+                <option value="note">Meilleures notes</option>
               </select>
             </div>
-            <div style={{ background:"#fff", borderRadius:16, border:"1px solid #e2e8f0", overflow:"auto", boxShadow:"0 2px 12px rgba(0,0,0,0.05)" }}>
+            <div style={{ background:W, borderRadius:12, border:`1px solid ${BORDER}`, overflow:"auto", boxShadow:"0 2px 12px rgba(0,0,0,0.04)" }}>
               <table style={{ width:"100%", borderCollapse:"collapse" as const, minWidth:700 }}>
-                <thead><tr style={{ background:"#0f172a" }}>{["Agence","Mode","Tarif/kg","Délai","Note","Contact"].map(h=><th key={h} style={{ padding:"13px 16px", textAlign:"left" as const, color:"#64748b", fontSize:11, fontWeight:700, letterSpacing:0.8, textTransform:"uppercase" as const }}>{h}</th>)}</tr></thead>
+                <thead><tr style={{ background:N1 }}>{["Agence","Mode","Tarif/kg","Délai","Note","Contact"].map(h=><th key={h} style={{ padding:"14px 18px", textAlign:"left" as const, color:G, fontSize:10, fontWeight:700, letterSpacing:"1.5px", textTransform:"uppercase" as const }}>{h}</th>)}</tr></thead>
                 <tbody>
                   {filtered.map((a,i)=>(
-                    <tr key={a.id} style={{ borderTop:"1px solid #f1f5f9", background:a.featured?"#f0f9ff":i%2===0?"#fff":"#fafafa", transition:"background 0.15s" }}
-                      onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background="#e0f2fe"}
-                      onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background=a.featured?"#f0f9ff":i%2===0?"#fff":"#fafafa"}>
-                      <td style={{ padding:"13px 16px" }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                          <div style={{ width:36, height:36, borderRadius:9, background:a.color, display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:900, fontSize:12, flexShrink:0 }}>{a.logo}</div>
-                          <div><div style={{ fontWeight:700, fontSize:13, color:"#0f172a" }}>{a.name}{a.verified&&<span style={{ background:"#dcfce7", color:"#166534", fontSize:9, padding:"1px 5px", borderRadius:100, marginLeft:5 }}>✓</span>}</div><div style={{ fontSize:10, color:"#94a3b8" }}>{a.adresse}</div></div>
+                    <tr key={a.id} style={{ borderTop:`1px solid ${BORDER}`, background:i%2===0?W:BG, transition:"background 0.15s" }}
+                      onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background="#f0f4ff"}
+                      onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background=i%2===0?W:BG}>
+                      <td style={{ padding:"14px 18px" }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                          <div style={{ width:38, height:38, borderRadius:8, background:a.color, display:"flex", alignItems:"center", justifyContent:"center", color:W, fontWeight:900, fontSize:12, flexShrink:0 }}>{a.logo}</div>
+                          <div><div style={{ fontWeight:700, fontSize:13, color:T1 }}>{a.name}{a.verified&&<span style={{ background:"#f0fdf4", color:"#166534", fontSize:9, padding:"1px 6px", borderRadius:4, marginLeft:6, fontWeight:700 }}>✓</span>}</div><div style={{ fontSize:10, color:T3 }}>{a.adresse}</div></div>
                         </div>
                       </td>
-                      <td style={{ padding:"13px 16px" }}><div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>{a.modes.map(m=><span key={m} style={{ background:"#f1f5f9", color:"#475569", fontSize:10, padding:"2px 6px", borderRadius:100, fontWeight:600 }}>{m}</span>)}</div></td>
-                      <td style={{ padding:"13px 16px" }}><span style={{ fontWeight:800, fontSize:14, color:a.color }}>{a.prix_kg}</span></td>
-                      <td style={{ padding:"13px 16px", fontSize:12, color:"#475569", fontWeight:600 }}>{a.delai}</td>
-                      <td style={{ padding:"13px 16px" }}><Stars n={a.note} avis={a.avis}/></td>
-                      <td style={{ padding:"13px 16px" }}><a href={`tel:${a.contacts[0]?.tel}`} style={{ background:a.color, color:"#fff", borderRadius:7, padding:"7px 13px", fontSize:11, fontWeight:700, cursor:"pointer", textDecoration:"none", display:"inline-block" }}>📞 Appeler</a></td>
+                      <td style={{ padding:"14px 18px" }}><div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>{a.modes.map(m=><span key={m} style={{ background:BG, color:T2, fontSize:10, padding:"3px 8px", borderRadius:4, fontWeight:600, border:`1px solid ${BORDER}` }}>{m}</span>)}</div></td>
+                      <td style={{ padding:"14px 18px" }}><span style={{ fontWeight:800, fontSize:14, color:G }}>{a.prix_kg}</span></td>
+                      <td style={{ padding:"14px 18px", fontSize:12, color:T2, fontWeight:600 }}>{a.delai}</td>
+                      <td style={{ padding:"14px 18px" }}><Stars n={a.note} avis={a.avis}/></td>
+                      <td style={{ padding:"14px 18px" }}><a href={`tel:${a.contacts[0]?.tel}`} style={{ background:N1, color:G, borderRadius:6, padding:"8px 14px", fontSize:11, fontWeight:700, cursor:"pointer", textDecoration:"none", display:"inline-block", letterSpacing:"0.5px" }}>APPELER</a></td>
                     </tr>
                   ))}
                 </tbody>
@@ -487,24 +508,31 @@ export default function Home() {
         {/* DEVIS */}
         {tab==="devis" && (
           <div style={{ maxWidth:620, margin:"0 auto" }}>
-            <div style={{ background:"#fff", borderRadius:20, padding:"36px", border:"1px solid #e2e8f0", boxShadow:"0 4px 24px rgba(0,0,0,0.06)" }}>
+            <div style={{ background:W, borderRadius:12, padding:"40px", border:`1px solid ${BORDER}`, boxShadow:"0 4px 24px rgba(0,0,0,0.05)" }}>
               {!devisOk ? (
                 <>
-                  <h2 style={{ fontSize:22, fontWeight:800, color:"#0f172a", marginTop:0, marginBottom:6 }}>📋 Publier une demande de devis</h2>
-                  <p style={{ color:"#64748b", fontSize:13, marginBottom:28, lineHeight:1.6 }}>Décrivez votre colis. Les agences vous répondront.</p>
-                  <div style={{ display:"flex", flexDirection:"column" as const, gap:15 }}>
-                    {[{k:"poids",l:"Poids estimé (kg)",t:"number",p:"Ex: 5"},{k:"dest",l:"Destination",t:"text",p:"Ex: Dakar, Sénégal"},{k:"type",l:"Type de colis",t:"text",p:"Ex: vêtements, cosmétiques..."}].map(f=>(
-                      <div key={f.k}><label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>{f.l}</label><input type={f.t} placeholder={f.p} value={devis[f.k as keyof typeof devis]} onChange={e=>setDevis({...devis,[f.k]:e.target.value})} style={{ width:"100%", padding:"11px 14px", borderRadius:10, border:"1px solid #e2e8f0", fontSize:14, outline:"none", boxSizing:"border-box" as const }}/></div>
+                  <h2 style={{ fontSize:22, fontWeight:800, color:T1, marginTop:0, marginBottom:8, letterSpacing:"-0.5px" }}>Demande de devis</h2>
+                  <p style={{ color:T2, fontSize:13, marginBottom:32, lineHeight:1.7 }}>Décrivez votre envoi. Les agences partenaires vous répondront sous 24h.</p>
+                  <div style={{ display:"flex", flexDirection:"column" as const, gap:18 }}>
+                    {[{k:"poids",l:"Poids estimé (kg)",t:"number",p:"Ex : 5 kg"},{k:"dest",l:"Destination",t:"text",p:"Ex : Dakar, Sénégal"},{k:"type",l:"Nature du colis",t:"text",p:"Ex : vêtements, cosmétiques..."}].map(f=>(
+                      <div key={f.k}>
+                        <label style={{ fontSize:11, fontWeight:700, color:T2, display:"block", marginBottom:7, textTransform:"uppercase" as const, letterSpacing:"1px" }}>{f.l}</label>
+                        <input type={f.t} placeholder={f.p} value={devis[f.k as keyof typeof devis]} onChange={e=>setDevis({...devis,[f.k]:e.target.value})} style={{ width:"100%", padding:"12px 16px", borderRadius:6, border:`1.5px solid ${BORDER}`, fontSize:14, outline:"none", boxSizing:"border-box" as const, color:T1, fontWeight:500 }}/>
+                      </div>
                     ))}
-                    <div><label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>Informations complémentaires</label><textarea rows={3} placeholder="Date souhaitée, contraintes..." value={devis.desc} onChange={e=>setDevis({...devis,desc:e.target.value})} style={{ width:"100%", padding:"11px 14px", borderRadius:10, border:"1px solid #e2e8f0", fontSize:13, outline:"none", resize:"none" as const, boxSizing:"border-box" as const }}/></div>
-                    <button onClick={()=>{if(devis.poids&&devis.dest)setDevisOk(true);}} style={{ background:"linear-gradient(135deg,#0ea5e9,#0369a1)", color:"#fff", border:"none", borderRadius:12, padding:"14px", fontSize:15, fontWeight:700, cursor:"pointer" }}>📤 Publier ma demande</button>
+                    <div>
+                      <label style={{ fontSize:11, fontWeight:700, color:T2, display:"block", marginBottom:7, textTransform:"uppercase" as const, letterSpacing:"1px" }}>Informations complémentaires</label>
+                      <textarea rows={3} placeholder="Date souhaitée, contraintes particulières..." value={devis.desc} onChange={e=>setDevis({...devis,desc:e.target.value})} style={{ width:"100%", padding:"12px 16px", borderRadius:6, border:`1.5px solid ${BORDER}`, fontSize:13, outline:"none", resize:"none" as const, boxSizing:"border-box" as const, color:T1 }}/>
+                    </div>
+                    <button onClick={()=>{if(devis.poids&&devis.dest)setDevisOk(true);}} style={{ background:G, color:N1, border:"none", borderRadius:6, padding:"15px", fontSize:13, fontWeight:800, cursor:"pointer", letterSpacing:"1px", marginTop:4 }}>SOUMETTRE MA DEMANDE →</button>
                   </div>
                 </>
               ) : (
-                <div style={{ textAlign:"center" as const, padding:"20px 0" }}>
-                  <div style={{ fontSize:64, marginBottom:16 }}>✅</div>
-                  <h3 style={{ fontSize:20, fontWeight:800, color:"#0f172a", marginBottom:8 }}>Demande publiée !</h3>
-                  <button onClick={()=>{setTab("messages");setDevisOk(false);setDevis({poids:"",dest:"",type:"",desc:""}); }} style={{ background:"#0ea5e9", color:"#fff", border:"none", borderRadius:10, padding:"12px 28px", fontSize:14, fontWeight:700, cursor:"pointer" }}>💬 Aller à la messagerie →</button>
+                <div style={{ textAlign:"center" as const, padding:"24px 0" }}>
+                  <div style={{ width:64, height:64, borderRadius:12, background:`linear-gradient(135deg,${G},${GD})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:28, margin:"0 auto 20px" }}>✓</div>
+                  <h3 style={{ fontSize:20, fontWeight:800, color:T1, marginBottom:10, letterSpacing:"-0.5px" }}>Demande transmise avec succès</h3>
+                  <p style={{ color:T2, fontSize:13, marginBottom:24 }}>Les agences partenaires vous contacteront prochainement.</p>
+                  <button onClick={()=>{setTab("messages");setDevisOk(false);setDevis({poids:"",dest:"",type:"",desc:""});}} style={{ background:N1, color:G, border:"none", borderRadius:6, padding:"12px 28px", fontSize:13, fontWeight:700, cursor:"pointer", letterSpacing:"0.5px" }}>ACCÉDER À LA MESSAGERIE →</button>
                 </div>
               )}
             </div>
@@ -514,185 +542,252 @@ export default function Home() {
         {/* MESSAGES */}
         {tab==="messages" && (
           <div>
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20, flexWrap:"wrap", gap:10 }}>
-              <h2 style={{ fontSize:22, fontWeight:800, color:"#0f172a", margin:0 }}>💬 Messagerie en direct</h2>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:22, flexWrap:"wrap", gap:10 }}>
+              <div>
+                <h2 style={{ fontSize:24, fontWeight:800, color:T1, margin:0, letterSpacing:"-0.5px" }}>Messagerie</h2>
+                <p style={{ color:T2, fontSize:12, margin:"4px 0 0" }}>Communication en temps réel · Historique sauvegardé</p>
+              </div>
               {myName && (
-                <div style={{ fontSize:12, color:"#64748b", display:"flex", alignItems:"center", gap:6 }}>
-                  <span style={{ width:8, height:8, borderRadius:"50%", background:connected?"#22c55e":"#f59e0b", display:"inline-block" }}/>
-                  <strong style={{ color:"#0ea5e9" }}>{dn}{isOwner?" 👑":""}</strong>
-                  <span style={{ color:connected?"#22c55e":"#f59e0b" }}>{connected?"· Connecté":"· Connexion…"}</span>
+                <div style={{ fontSize:12, color:T2, display:"flex", alignItems:"center", gap:7, background:W, border:`1px solid ${BORDER}`, borderRadius:6, padding:"7px 14px" }}>
+                  <span style={{ width:7, height:7, borderRadius:"50%", background:connected?"#22c55e":"#f59e0b", display:"inline-block" }}/>
+                  <strong style={{ color:G }}>{dn}{isOwner?" ★":""}</strong>
+                  <span style={{ color:connected?"#22c55e":"#f59e0b" }}>{connected?"Connecté":"Connexion..."}</span>
                 </div>
               )}
             </div>
 
-            <div style={{ display:"grid", gridTemplateColumns:"260px 1fr", gap:0, borderRadius:16, overflow:"hidden", border:"1px solid #e2e8f0", boxShadow:"0 4px 24px rgba(0,0,0,0.07)", height:580 }}>
-              {/* Sidebar */}
-              <div style={{ background:"#fff", borderRight:"1px solid #f1f5f9", display:"flex", flexDirection:"column" as const, overflowY:"auto" as const }}>
-                <div style={{ padding:"14px 16px", background:"#0f172a", flexShrink:0 }}>
-                  <div style={{ color:"#fff", fontWeight:700, fontSize:13 }}>Conversations</div>
-                  <div style={{ color:"#475569", fontSize:11, marginTop:2 }}>🟢 {onlineUsers.length + 1} en ligne</div>
+            <div style={{ display:"grid", gridTemplateColumns:"270px 1fr", gap:0, borderRadius:12, overflow:"hidden", border:`1px solid ${BORDER}`, boxShadow:"0 4px 24px rgba(0,0,0,0.06)", height:580 }}>
+              <div style={{ background:W, borderRight:`1px solid ${BORDER}`, display:"flex", flexDirection:"column" as const, overflowY:"auto" as const }}>
+                <div style={{ padding:"14px 18px", background:N1, flexShrink:0 }}>
+                  <div style={{ color:G, fontWeight:700, fontSize:12, letterSpacing:"1px", textTransform:"uppercase" as const }}>Conversations</div>
+                  <div style={{ color:T3, fontSize:11, marginTop:3 }}>● {onlineUsers.length + 1} en ligne</div>
                 </div>
-                <div onClick={()=>openChat(null)} style={{ padding:"12px 14px", borderBottom:"1px solid #f1f5f9", cursor:"pointer", background:chatWith===null?"#eff6ff":"#fff", display:"flex", gap:10, alignItems:"center" }}
-                  onMouseEnter={e=>{if(chatWith!==null)(e.currentTarget as HTMLElement).style.background="#f8fafc";}}
-                  onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background=chatWith===null?"#eff6ff":"#fff";}}>
-                  <div style={{ width:38, height:38, borderRadius:10, background:"linear-gradient(135deg,#22d3ee,#0ea5e9)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>🌍</div>
+                <div onClick={()=>openChat(null)} style={{ padding:"13px 16px", borderBottom:`1px solid ${BG}`, cursor:"pointer", background:chatWith===null?`rgba(201,168,76,0.06)`:W, display:"flex", gap:10, alignItems:"center" }}
+                  onMouseEnter={e=>{if(chatWith!==null)(e.currentTarget as HTMLElement).style.background=BG;}}
+                  onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background=chatWith===null?`rgba(201,168,76,0.06)`:W;}}>
+                  <div style={{ width:38, height:38, borderRadius:8, background:`linear-gradient(135deg,${N2},${N3})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0, border:`1px solid rgba(201,168,76,0.2)` }}>🌐</div>
                   <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontWeight:700, fontSize:12, color:"#0f172a" }}>Chat public</div>
-                    <div style={{ fontSize:11, color:"#94a3b8" }}>Visible par tous</div>
+                    <div style={{ fontWeight:700, fontSize:12, color:T1 }}>Canal public</div>
+                    <div style={{ fontSize:11, color:T3 }}>Tous les utilisateurs</div>
                   </div>
-                  {(unread["__public__"]||0)>0 && <span style={{ background:"#ef4444", color:"#fff", borderRadius:100, fontSize:10, fontWeight:700, padding:"1px 6px" }}>{unread["__public__"]}</span>}
+                  {(unread["__public__"]||0)>0 && <span style={{ background:"#ef4444", color:W, borderRadius:100, fontSize:10, fontWeight:700, padding:"1px 6px" }}>{unread["__public__"]}</span>}
                 </div>
                 {onlineUsers.length===0 ? (
-                  <div style={{ padding:"24px 16px", textAlign:"center" as const, color:"#94a3b8", fontSize:12 }}>
-                    <div style={{ fontSize:32, marginBottom:8 }}>👥</div>
-                    Personne d&apos;autre en ligne<br/>
-                    <span style={{ fontSize:11, marginTop:4, display:"block" }}>Partage le lien Vercel !</span>
+                  <div style={{ padding:"28px 16px", textAlign:"center" as const, color:T3, fontSize:12 }}>
+                    <div style={{ fontSize:28, marginBottom:8, opacity:0.3 }}>👥</div>
+                    Aucun autre utilisateur<br/>
+                    <span style={{ fontSize:11, marginTop:6, display:"block", color:T3 }}>Partagez votre lien Vercel</span>
                   </div>
                 ) : onlineUsers.map(u=>(
-                  <div key={u} onClick={()=>openChat(u)} style={{ padding:"12px 14px", borderBottom:"1px solid #f8fafc", cursor:"pointer", background:chatWith===u?"#eff6ff":"#fff", display:"flex", gap:10, alignItems:"center" }}
-                    onMouseEnter={e=>{if(chatWith!==u)(e.currentTarget as HTMLElement).style.background="#f8fafc";}}
-                    onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background=chatWith===u?"#eff6ff":"#fff";}}>
-                    <div style={{ width:38, height:38, borderRadius:10, background:"linear-gradient(135deg,#7c3aed,#a855f7)", display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:900, fontSize:15, flexShrink:0, position:"relative" }}>
+                  <div key={u} onClick={()=>openChat(u)} style={{ padding:"13px 16px", borderBottom:`1px solid ${BG}`, cursor:"pointer", background:chatWith===u?`rgba(201,168,76,0.06)`:W, display:"flex", gap:10, alignItems:"center" }}
+                    onMouseEnter={e=>{if(chatWith!==u)(e.currentTarget as HTMLElement).style.background=BG;}}
+                    onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background=chatWith===u?`rgba(201,168,76,0.06)`:W;}}>
+                    <div style={{ width:38, height:38, borderRadius:8, background:`linear-gradient(135deg,${N2},${N3})`, display:"flex", alignItems:"center", justifyContent:"center", color:G, fontWeight:900, fontSize:14, flexShrink:0, position:"relative", border:`1px solid rgba(201,168,76,0.2)` }}>
                       {u[0].toUpperCase()}
-                      <div style={{ position:"absolute", bottom:-2, right:-2, width:10, height:10, borderRadius:"50%", background:"#22c55e", border:"2px solid #fff" }}/>
+                      <div style={{ position:"absolute", bottom:-2, right:-2, width:10, height:10, borderRadius:"50%", background:"#22c55e", border:`2px solid ${W}` }}/>
                     </div>
                     <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontWeight:700, fontSize:12, color:"#0f172a" }}>{u}</div>
-                      <div style={{ fontSize:11, color:"#22c55e" }}>En ligne</div>
+                      <div style={{ fontWeight:700, fontSize:12, color:T1 }}>{u}</div>
+                      <div style={{ fontSize:11, color:"#22c55e", fontWeight:600 }}>En ligne</div>
                     </div>
-                    {(unread[u]||0)>0 && <span style={{ background:"#ef4444", color:"#fff", borderRadius:100, fontSize:10, fontWeight:700, padding:"1px 6px" }}>{unread[u]}</span>}
+                    {(unread[u]||0)>0 && <span style={{ background:"#ef4444", color:W, borderRadius:100, fontSize:10, fontWeight:700, padding:"1px 6px" }}>{unread[u]}</span>}
                   </div>
                 ))}
               </div>
 
-              {/* Zone chat */}
-              <div style={{ display:"flex", flexDirection:"column" as const, background:"#f8fafc" }}>
-                <div style={{ padding:"14px 20px", borderBottom:"1px solid #f1f5f9", background:"#fff", display:"flex", alignItems:"center", gap:12, flexShrink:0 }}>
-                  <div style={{ width:38, height:38, borderRadius:10, background:chatWith===null?"linear-gradient(135deg,#22d3ee,#0ea5e9)":"linear-gradient(135deg,#7c3aed,#a855f7)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:chatWith===null?18:16, color:"#fff", fontWeight:900 }}>
-                    {chatWith===null?"🌍":chatWith[0].toUpperCase()}
+              <div style={{ display:"flex", flexDirection:"column" as const, background:BG }}>
+                <div style={{ padding:"14px 20px", borderBottom:`1px solid ${BORDER}`, background:W, display:"flex", alignItems:"center", gap:12, flexShrink:0 }}>
+                  <div style={{ width:38, height:38, borderRadius:8, background:`linear-gradient(135deg,${N2},${N3})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:chatWith===null?16:14, color:G, fontWeight:900, border:`1px solid rgba(201,168,76,0.2)` }}>
+                    {chatWith===null?"🌐":chatWith[0].toUpperCase()}
                   </div>
                   <div>
-                    <div style={{ fontWeight:800, fontSize:14, color:"#0f172a" }}>{chatWith===null?"Chat public":chatWith}</div>
-                    <div style={{ fontSize:11, color:"#22c55e" }}>{chatWith===null?`${onlineUsers.length+1} participant(s)`:"En ligne · Message privé"}</div>
+                    <div style={{ fontWeight:800, fontSize:14, color:T1 }}>{chatWith===null?"Canal public":chatWith}</div>
+                    <div style={{ fontSize:11, color:T2 }}>{chatWith===null?`${onlineUsers.length+1} participant(s)`:"Message privé · En ligne"}</div>
                   </div>
                 </div>
                 <div style={{ flex:1, overflowY:"auto" as const, padding:"20px", display:"flex", flexDirection:"column" as const, gap:10 }}>
                   {currentMsgs.length===0 && (
-                    <div style={{ textAlign:"center" as const, color:"#94a3b8", marginTop:60 }}>
-                      <div style={{ fontSize:40, marginBottom:8, opacity:0.4 }}>💬</div>
-                      <div style={{ fontSize:13 }}>Aucun message · Soyez le premier !</div>
+                    <div style={{ textAlign:"center" as const, color:T3, marginTop:60 }}>
+                      <div style={{ fontSize:36, marginBottom:10, opacity:0.3 }}>✉</div>
+                      <div style={{ fontSize:13, fontWeight:600 }}>Aucun message pour l&apos;instant</div>
                     </div>
                   )}
                   {currentMsgs.map(msg=>(
                     <div key={msg.id} style={{ display:"flex", justifyContent:msg.from_name===dn?"flex-end":"flex-start", alignItems:"flex-end", gap:8 }}>
-                      {msg.from_name!==dn && <div style={{ width:28, height:28, borderRadius:8, background:"linear-gradient(135deg,#7c3aed,#a855f7)", display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:900, fontSize:11, flexShrink:0 }}>{msg.from_name[0].toUpperCase()}</div>}
+                      {msg.from_name!==dn && <div style={{ width:28, height:28, borderRadius:6, background:`linear-gradient(135deg,${N2},${N3})`, display:"flex", alignItems:"center", justifyContent:"center", color:G, fontWeight:900, fontSize:11, flexShrink:0 }}>{msg.from_name[0].toUpperCase()}</div>}
                       <div style={{ maxWidth:"70%" }}>
-                        {msg.from_name!==dn && <div style={{ fontSize:10, color:"#94a3b8", marginBottom:3, fontWeight:600 }}>{msg.from_name}</div>}
-                        <div style={{ background:msg.from_name===dn?"linear-gradient(135deg,#0ea5e9,#0369a1)":"#fff", color:msg.from_name===dn?"#fff":"#334155", borderRadius:msg.from_name===dn?"16px 16px 4px 16px":"16px 16px 16px 4px", padding:"10px 14px", fontSize:13, boxShadow:msg.from_name!==dn?"0 1px 6px rgba(0,0,0,0.08)":"none", lineHeight:1.5 }}>
+                        {msg.from_name!==dn && <div style={{ fontSize:10, color:T3, marginBottom:3, fontWeight:700, letterSpacing:"0.3px" }}>{msg.from_name}</div>}
+                        <div style={{ background:msg.from_name===dn?N1:W, color:msg.from_name===dn?G:T1, borderRadius:msg.from_name===dn?"10px 10px 2px 10px":"10px 10px 10px 2px", padding:"10px 14px", fontSize:13, boxShadow:msg.from_name!==dn?"0 1px 4px rgba(0,0,0,0.06)":"none", lineHeight:1.5, border:msg.from_name===dn?`1px solid rgba(201,168,76,0.15)`:`1px solid ${BORDER}` }}>
                           {msg.text}
-                          <div style={{ fontSize:10, opacity:0.5, marginTop:4, textAlign:"right" as const }}>{new Date(msg.created_at).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</div>
+                          <div style={{ fontSize:10, opacity:0.4, marginTop:4, textAlign:"right" as const }}>{new Date(msg.created_at).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</div>
                         </div>
                       </div>
                     </div>
                   ))}
                   <div ref={chatEndRef}/>
                 </div>
-                <div style={{ padding:"6px 16px", background:"#fffbeb", borderTop:"1px solid #fef3c7", fontSize:10, color:"#92400e", textAlign:"center" as const, flexShrink:0 }}>
-                  ⚡ Historique sauvegardé · Supabase Realtime
-                </div>
-                <div style={{ padding:"12px 16px", borderTop:"1px solid #f1f5f9", background:"#fff", display:"flex", gap:10, alignItems:"center", flexShrink:0 }}>
-                  <input value={rtInput} onChange={e=>setRtInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")sendRt();}} placeholder={myName?`Message ${chatWith?`privé à ${chatWith}`:"public"}...`:"Connectez-vous d'abord…"} disabled={!myName||!connected} style={{ flex:1, padding:"10px 16px", borderRadius:24, border:"1px solid #e2e8f0", fontSize:14, outline:"none", background:"#f8fafc" }}/>
-                  <button onClick={sendRt} disabled={!myName||!rtInput.trim()||!connected} style={{ background:"linear-gradient(135deg,#0ea5e9,#0369a1)", color:"#fff", border:"none", borderRadius:"50%", width:42, height:42, fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, opacity:(!myName||!rtInput.trim()||!connected)?0.4:1 }}>➤</button>
+                <div style={{ padding:"12px 16px", borderTop:`1px solid ${BORDER}`, background:W, display:"flex", gap:10, alignItems:"center", flexShrink:0 }}>
+                  <input value={rtInput} onChange={e=>setRtInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")sendRt();}} placeholder={myName?`Message ${chatWith?`privé à ${chatWith}`:"public"}...`:"Identifiez-vous d'abord…"} disabled={!myName||!connected} style={{ flex:1, padding:"11px 18px", borderRadius:6, border:`1.5px solid ${BORDER}`, fontSize:13, outline:"none", background:BG, color:T1 }}/>
+                  <button onClick={sendRt} disabled={!myName||!rtInput.trim()||!connected} style={{ background:G, color:N1, border:"none", borderRadius:6, width:44, height:44, fontSize:16, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, opacity:(!myName||!rtInput.trim()||!connected)?0.4:1, fontWeight:900 }}>→</button>
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* ADMIN (localhost seulement) */}
+        {/* ADMIN */}
         {tab==="admin" && isOwner && (
           <div>
             <div style={{ marginBottom:28 }}>
-              <h2 style={{ fontSize:24, fontWeight:800, color:"#0f172a", margin:"0 0 4px" }}>⚙️ Panel Administrateur</h2>
-              <p style={{ color:"#64748b", fontSize:13, margin:0 }}>Vue complète de la plateforme · Accessible uniquement en local</p>
+              <h2 style={{ fontSize:24, fontWeight:800, color:T1, margin:"0 0 4px", letterSpacing:"-0.5px" }}>Panel Administrateur</h2>
+              <p style={{ color:T2, fontSize:13, margin:0 }}>Vue consolidée de la plateforme · Accès restreint</p>
             </div>
-
-            {/* Stats */}
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))", gap:16, marginBottom:32 }}>
-              {[
-                { icon:"💬", label:"Messages total", value:dbMessages.length },
-                { icon:"🏪", label:"Boutiques", value:adminShopOwners.length },
-                { icon:"👥", label:"Clients", value:adminClients.length },
-                { icon:"📦", label:"Produits", value:products.length },
-                { icon:"🟢", label:"En ligne", value:onlineUsers.length+1 },
-              ].map(s=>(
-                <div key={s.label} style={{ background:"#fff", borderRadius:16, padding:"20px", border:"1px solid #e2e8f0", boxShadow:"0 2px 8px rgba(0,0,0,0.04)" }}>
-                  <div style={{ fontSize:28, marginBottom:8 }}>{s.icon}</div>
-                  <div style={{ fontSize:28, fontWeight:900, color:"#0ea5e9", lineHeight:1 }}>{s.value}</div>
-                  <div style={{ fontSize:12, color:"#94a3b8", marginTop:4, fontWeight:600 }}>{s.label}</div>
+              {[{icon:"✉",label:"Messages",value:dbMessages.length},{icon:"🛍",label:"Boutiques",value:adminShopOwners.length},{icon:"👤",label:"Clients",value:adminClients.length},{icon:"📦",label:"Produits",value:products.length},{icon:"●",label:"En ligne",value:onlineUsers.length+1}].map(s=>(
+                <div key={s.label} style={{ background:W, borderRadius:10, padding:"20px", border:`1px solid ${BORDER}`, boxShadow:"0 2px 8px rgba(0,0,0,0.03)" }}>
+                  <div style={{ fontSize:24, marginBottom:10, color:G }}>{s.icon}</div>
+                  <div style={{ fontSize:30, fontWeight:900, color:T1, lineHeight:1, letterSpacing:"-1px" }}>{s.value}</div>
+                  <div style={{ fontSize:11, color:T3, marginTop:5, fontWeight:600, letterSpacing:"0.5px", textTransform:"uppercase" as const }}>{s.label}</div>
                 </div>
               ))}
             </div>
-
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:24 }}>
-              {/* Boutiques */}
-              <div style={{ background:"#fff", borderRadius:16, padding:"24px", border:"1px solid #e2e8f0" }}>
-                <h3 style={{ fontSize:16, fontWeight:800, color:"#0f172a", margin:"0 0 16px" }}>🏪 Boutiques ({adminShopOwners.length})</h3>
-                {adminShopOwners.length===0 ? (
-                  <div style={{ color:"#94a3b8", fontSize:13, textAlign:"center" as const, padding:"20px" }}>Aucune boutique</div>
-                ) : adminShopOwners.map(owner=>{
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:22 }}>
+              <div style={{ background:W, borderRadius:12, padding:"24px", border:`1px solid ${BORDER}` }}>
+                <h3 style={{ fontSize:14, fontWeight:800, color:T1, margin:"0 0 18px", textTransform:"uppercase" as const, letterSpacing:"1px" }}>Boutiques ({adminShopOwners.length})</h3>
+                {adminShopOwners.length===0 ? <div style={{ color:T3, fontSize:13, textAlign:"center" as const, padding:"20px" }}>Aucune boutique</div> : adminShopOwners.map(owner=>{
                   const ownerProducts = products.filter(p=>p.owner===owner);
                   return (
-                    <div key={owner} style={{ padding:"12px", borderRadius:10, border:"1px solid #f1f5f9", marginBottom:8, display:"flex", alignItems:"center", gap:12 }}>
-                      <div style={{ width:40, height:40, borderRadius:10, background:"linear-gradient(135deg,#0ea5e9,#0369a1)", display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:900, fontSize:14 }}>{owner[0].toUpperCase()}</div>
+                    <div key={owner} style={{ padding:"12px", borderRadius:8, border:`1px solid ${BORDER}`, marginBottom:8, display:"flex", alignItems:"center", gap:12 }}>
+                      <div style={{ width:40, height:40, borderRadius:8, background:`linear-gradient(135deg,${N2},${N3})`, display:"flex", alignItems:"center", justifyContent:"center", color:G, fontWeight:900, fontSize:14 }}>{owner[0].toUpperCase()}</div>
                       <div style={{ flex:1 }}>
-                        <div style={{ fontWeight:700, fontSize:13, color:"#0f172a" }}>{owner}</div>
-                        <div style={{ fontSize:11, color:"#64748b" }}>{ownerProducts.length} produit(s)</div>
+                        <div style={{ fontWeight:700, fontSize:13, color:T1 }}>{owner}</div>
+                        <div style={{ fontSize:11, color:T3 }}>{ownerProducts.length} produit(s)</div>
                       </div>
-                      <button onClick={()=>openChat(owner)} style={{ background:"#eff6ff", color:"#0ea5e9", border:"none", borderRadius:8, padding:"6px 10px", fontSize:11, fontWeight:600, cursor:"pointer" }}>💬</button>
+                      <button onClick={()=>openChat(owner)} style={{ background:BG, color:T2, border:`1px solid ${BORDER}`, borderRadius:6, padding:"6px 10px", fontSize:11, fontWeight:600, cursor:"pointer" }}>✉</button>
                     </div>
                   );
                 })}
               </div>
-
-              {/* Clients */}
-              <div style={{ background:"#fff", borderRadius:16, padding:"24px", border:"1px solid #e2e8f0" }}>
-                <h3 style={{ fontSize:16, fontWeight:800, color:"#0f172a", margin:"0 0 16px" }}>👥 Clients ({adminClients.length})</h3>
-                {adminClients.length===0 ? (
-                  <div style={{ color:"#94a3b8", fontSize:13, textAlign:"center" as const, padding:"20px" }}>Aucun client encore</div>
-                ) : adminClients.map(client=>{
+              <div style={{ background:W, borderRadius:12, padding:"24px", border:`1px solid ${BORDER}` }}>
+                <h3 style={{ fontSize:14, fontWeight:800, color:T1, margin:"0 0 18px", textTransform:"uppercase" as const, letterSpacing:"1px" }}>Clients ({adminClients.length})</h3>
+                {adminClients.length===0 ? <div style={{ color:T3, fontSize:13, textAlign:"center" as const, padding:"20px" }}>Aucun client encore</div> : adminClients.map(client=>{
                   const clientMsgs = dbMessages.filter(m=>m.from_name===client||m.to_name===client);
                   const lastMsg = clientMsgs[clientMsgs.length-1];
                   return (
-                    <div key={client} style={{ padding:"12px", borderRadius:10, border:"1px solid #f1f5f9", marginBottom:8, display:"flex", alignItems:"center", gap:12 }}>
-                      <div style={{ width:40, height:40, borderRadius:10, background:"linear-gradient(135deg,#7c3aed,#a855f7)", display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:900, fontSize:14 }}>{client[0].toUpperCase()}</div>
+                    <div key={client} style={{ padding:"12px", borderRadius:8, border:`1px solid ${BORDER}`, marginBottom:8, display:"flex", alignItems:"center", gap:12 }}>
+                      <div style={{ width:40, height:40, borderRadius:8, background:`linear-gradient(135deg,#4c1d95,#6d28d9)`, display:"flex", alignItems:"center", justifyContent:"center", color:W, fontWeight:900, fontSize:14 }}>{client[0].toUpperCase()}</div>
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontWeight:700, fontSize:13, color:"#0f172a" }}>{client}</div>
-                        {lastMsg && <div style={{ fontSize:11, color:"#94a3b8", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{lastMsg.text}</div>}
-                        <div style={{ fontSize:10, color:"#cbd5e1" }}>{clientMsgs.length} message(s)</div>
+                        <div style={{ fontWeight:700, fontSize:13, color:T1 }}>{client}</div>
+                        {lastMsg && <div style={{ fontSize:11, color:T3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{lastMsg.text}</div>}
+                        <div style={{ fontSize:10, color:T3 }}>{clientMsgs.length} message(s)</div>
                       </div>
-                      <button onClick={()=>openChat(client)} style={{ background:"#faf5ff", color:"#7c3aed", border:"none", borderRadius:8, padding:"6px 10px", fontSize:11, fontWeight:600, cursor:"pointer" }}>💬</button>
+                      <button onClick={()=>openChat(client)} style={{ background:BG, color:T2, border:`1px solid ${BORDER}`, borderRadius:6, padding:"6px 10px", fontSize:11, fontWeight:600, cursor:"pointer" }}>✉</button>
                     </div>
                   );
                 })}
               </div>
             </div>
+            {/* ANALYTICS */}
+            <div style={{ marginTop:32, marginBottom:4 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:22 }}>
+                <div style={{ width:36, height:36, borderRadius:8, background:`linear-gradient(135deg,${G},${GD})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>📊</div>
+                <div>
+                  <h3 style={{ fontSize:16, fontWeight:800, color:T1, margin:0, letterSpacing:"-0.3px" }}>Analytics & Audit</h3>
+                  <div style={{ fontSize:11, color:T3, marginTop:2, fontWeight:600, letterSpacing:"0.5px" }}>DONNÉES DU MOIS EN COURS · CONFIDENTIEL</div>
+                </div>
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))", gap:14, marginBottom:24 }}>
+                {[
+                  { label:"Messages ce mois", value: msgsThisMonth.length, sub: monthGrowth >= 0 ? `+${monthGrowth}% vs mois préc.` : `${monthGrowth}% vs mois préc.`, color: monthGrowth >= 0 ? "#22c55e" : "#ef4444" },
+                  { label:"Mois précédent", value: msgsLastMonth.length, sub:"messages", color: T3 },
+                  { label:"Boutiques actives", value: boutiqueActivity.filter(b=>b.messages>0).length, sub:`sur ${adminShopOwners.length} total`, color: G },
+                  { label:"Nouvelles destinations", value: topDests.length, sub:"détectées dans chats", color: "#60a5fa" },
+                ].map(s => (
+                  <div key={s.label} style={{ background:W, borderRadius:10, padding:"18px 16px", border:`1px solid ${BORDER}`, boxShadow:"0 2px 8px rgba(0,0,0,0.03)" }}>
+                    <div style={{ fontSize:28, fontWeight:900, color:T1, lineHeight:1, letterSpacing:"-1px", marginBottom:6 }}>{s.value}</div>
+                    <div style={{ fontSize:10, color:T2, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.5px", marginBottom:4 }}>{s.label}</div>
+                    <div style={{ fontSize:10, color: s.color, fontWeight:600 }}>{s.sub}</div>
+                  </div>
+                ))}
+              </div>
 
-            {/* Historique messages */}
-            <div style={{ background:"#fff", borderRadius:16, padding:"24px", border:"1px solid #e2e8f0", marginTop:24 }}>
-              <h3 style={{ fontSize:16, fontWeight:800, color:"#0f172a", margin:"0 0 16px" }}>📜 Derniers messages ({dbMessages.length})</h3>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, marginBottom:20 }}>
+                <div style={{ background:W, borderRadius:12, padding:"22px 24px", border:`1px solid ${BORDER}` }}>
+                  <h4 style={{ fontSize:12, fontWeight:800, color:T1, margin:"0 0 18px", textTransform:"uppercase" as const, letterSpacing:"1px" }}>Activité jour par jour — {now.toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}</h4>
+                  {msgsThisMonth.length === 0 ? (
+                    <div style={{ color:T3, fontSize:12, textAlign:"center" as const, padding:"24px 0" }}>Aucun message ce mois</div>
+                  ) : (
+                    <div style={{ display:"flex", alignItems:"flex-end", gap:3, height:80, paddingBottom:4 }}>
+                      {msgsByDay.map(d => (
+                        <div key={d.day} style={{ flex:1, display:"flex", flexDirection:"column" as const, alignItems:"center", gap:2 }}>
+                          <div title={`${d.day}/${now.getMonth()+1} : ${d.count} msg`} style={{ width:"100%", height: d.count === 0 ? 2 : Math.max(4, Math.round((d.count / maxDay) * 72)), background: d.count === 0 ? BORDER : d.day === now.getDate() ? G : `rgba(201,168,76,${0.3 + 0.7 * (d.count / maxDay)})`, borderRadius:"2px 2px 0 0", cursor:"default", transition:"all 0.2s" }}/>
+                          {(d.day === 1 || d.day === 10 || d.day === 20 || d.day === now.getDate()) && <div style={{ fontSize:8, color:T3, fontWeight:600 }}>{d.day}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ background:W, borderRadius:12, padding:"22px 24px", border:`1px solid ${BORDER}` }}>
+                  <h4 style={{ fontSize:12, fontWeight:800, color:T1, margin:"0 0 18px", textTransform:"uppercase" as const, letterSpacing:"1px" }}>Destinations les plus demandées</h4>
+                  {topDests.length === 0 ? (
+                    <div style={{ color:T3, fontSize:12, textAlign:"center" as const, padding:"24px 0" }}>Aucune destination détectée</div>
+                  ) : topDests.map(([dest, count], i) => (
+                    <div key={dest} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
+                      <div style={{ fontSize:11, fontWeight:800, color:T3, width:16, textAlign:"right" as const }}>{i+1}</div>
+                      <div style={{ fontSize:12, fontWeight:700, color:T1, width:110, flexShrink:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{dest}</div>
+                      <div style={{ flex:1, background:BG, borderRadius:4, height:8, overflow:"hidden" }}>
+                        <div style={{ height:"100%", width:`${(count/maxDest)*100}%`, background:`linear-gradient(90deg,${G},${GL})`, borderRadius:4, transition:"width 0.5s" }}/>
+                      </div>
+                      <div style={{ fontSize:11, fontWeight:800, color:G, width:24, textAlign:"right" as const }}>{count}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ background:W, borderRadius:12, padding:"22px 24px", border:`1px solid ${BORDER}`, marginBottom:20 }}>
+                <h4 style={{ fontSize:12, fontWeight:800, color:T1, margin:"0 0 18px", textTransform:"uppercase" as const, letterSpacing:"1px" }}>Performance des boutiques</h4>
+                {boutiqueActivity.length === 0 ? (
+                  <div style={{ color:T3, fontSize:12, textAlign:"center" as const, padding:"20px" }}>Aucune boutique enregistrée</div>
+                ) : boutiqueActivity.map((b, i) => (
+                  <div key={b.owner} style={{ display:"flex", alignItems:"center", gap:14, marginBottom:12, padding:"12px 14px", borderRadius:8, background: i===0 ? `rgba(201,168,76,0.05)` : BG, border:`1px solid ${i===0?`rgba(201,168,76,0.2)`:BORDER}` }}>
+                    <div style={{ fontSize:11, fontWeight:800, color: i===0?G:T3, width:20, textAlign:"center" as const }}>{i===0?"★":`#${i+1}`}</div>
+                    <div style={{ width:36, height:36, borderRadius:8, background:`linear-gradient(135deg,${N2},${N3})`, display:"flex", alignItems:"center", justifyContent:"center", color:G, fontWeight:900, fontSize:14, flexShrink:0 }}>{b.owner[0].toUpperCase()}</div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontWeight:700, fontSize:13, color:T1, marginBottom:2 }}>{b.owner}</div>
+                      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                        <div style={{ flex:1, background:"#e4e8ef", borderRadius:4, height:6, overflow:"hidden" }}>
+                          <div style={{ height:"100%", width:`${(b.messages/maxBoutiqueMsg)*100}%`, background:`linear-gradient(90deg,${N2},${N3})`, borderRadius:4 }}/>
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ textAlign:"right" as const, flexShrink:0 }}>
+                      <div style={{ fontSize:14, fontWeight:900, color:T1 }}>{b.messages}</div>
+                      <div style={{ fontSize:9, color:T3, fontWeight:600, textTransform:"uppercase" as const }}>messages</div>
+                    </div>
+                    <div style={{ textAlign:"right" as const, flexShrink:0, borderLeft:`1px solid ${BORDER}`, paddingLeft:14 }}>
+                      <div style={{ fontSize:14, fontWeight:900, color:G }}>{b.products}</div>
+                      <div style={{ fontSize:9, color:T3, fontWeight:600, textTransform:"uppercase" as const }}>produits</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ background:W, borderRadius:12, padding:"24px", border:`1px solid ${BORDER}`, marginTop:22 }}>
+              <h3 style={{ fontSize:14, fontWeight:800, color:T1, margin:"0 0 18px", textTransform:"uppercase" as const, letterSpacing:"1px" }}>Historique ({dbMessages.length} messages)</h3>
               <div style={{ maxHeight:320, overflowY:"auto" as const }}>
                 {dbMessages.slice(-30).reverse().map(m=>(
-                  <div key={m.id} style={{ display:"flex", gap:10, padding:"10px 0", borderBottom:"1px solid #f8fafc", alignItems:"flex-start" }}>
-                    <div style={{ width:32, height:32, borderRadius:8, background:"linear-gradient(135deg,#0ea5e9,#7c3aed)", display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:900, fontSize:12, flexShrink:0 }}>{m.from_name[0].toUpperCase()}</div>
+                  <div key={m.id} style={{ display:"flex", gap:10, padding:"10px 0", borderBottom:`1px solid ${BG}`, alignItems:"flex-start" }}>
+                    <div style={{ width:32, height:32, borderRadius:6, background:`linear-gradient(135deg,${N2},${N3})`, display:"flex", alignItems:"center", justifyContent:"center", color:G, fontWeight:900, fontSize:12, flexShrink:0 }}>{m.from_name[0].toUpperCase()}</div>
                     <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:2 }}>
-                        <span style={{ fontSize:12, fontWeight:700, color:"#0f172a" }}>{m.from_name}</span>
-                        {m.to_name && <><span style={{ fontSize:10, color:"#94a3b8" }}>→</span><span style={{ fontSize:11, color:"#0ea5e9", fontWeight:600 }}>{m.to_name}</span></>}
-                        {!m.to_name && <span style={{ fontSize:9, background:"#e0f2fe", color:"#0369a1", borderRadius:100, padding:"1px 6px", fontWeight:600 }}>PUBLIC</span>}
-                        <span style={{ fontSize:10, color:"#cbd5e1", marginLeft:"auto" }}>{new Date(m.created_at).toLocaleString("fr-FR",{hour:"2-digit",minute:"2-digit",day:"2-digit",month:"2-digit"})}</span>
+                      <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:2, flexWrap:"wrap" }}>
+                        <span style={{ fontSize:12, fontWeight:700, color:T1 }}>{m.from_name}</span>
+                        {m.to_name && <><span style={{ fontSize:10, color:T3 }}>→</span><span style={{ fontSize:11, color:G, fontWeight:600 }}>{m.to_name}</span></>}
+                        {!m.to_name && <span style={{ fontSize:9, background:BG, color:T2, border:`1px solid ${BORDER}`, borderRadius:4, padding:"1px 6px", fontWeight:700, letterSpacing:"0.5px" }}>PUBLIC</span>}
+                        <span style={{ fontSize:10, color:T3, marginLeft:"auto" }}>{new Date(m.created_at).toLocaleString("fr-FR",{hour:"2-digit",minute:"2-digit",day:"2-digit",month:"2-digit"})}</span>
                       </div>
-                      <div style={{ fontSize:12, color:"#475569", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.text}</div>
+                      <div style={{ fontSize:12, color:T2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.text}</div>
                     </div>
                   </div>
                 ))}
@@ -703,31 +798,34 @@ export default function Home() {
       </div>
 
       {/* CTA */}
-      <section style={{ background:"linear-gradient(135deg,#0f172a,#1e3a5f)", padding:"60px 2rem", textAlign:"center" as const }}>
+      <section style={{ background:N1, padding:"64px 2rem", textAlign:"center" as const, borderTop:`1px solid rgba(201,168,76,0.12)` }}>
         <div style={{ maxWidth:560, margin:"0 auto" }}>
-          <h2 style={{ color:"#fff", fontSize:26, fontWeight:800, marginBottom:10 }}>Vous êtes une agence de livraison ?</h2>
-          <p style={{ color:"#64748b", fontSize:14, marginBottom:28 }}>Rejoignez le réseau · Clients qualifiés · Visibilité gratuite</p>
-          <button onClick={()=>{setShowForm(true);setFormType("agence");setFormStatus("idle");}} style={{ background:"linear-gradient(135deg,#22d3ee,#0ea5e9)", color:"#fff", border:"none", borderRadius:12, padding:"13px 32px", fontSize:14, fontWeight:700, cursor:"pointer", marginRight:10, boxShadow:"0 4px 16px rgba(34,211,238,0.3)" }}>Inscrire mon agence →</button>
-          <button onClick={()=>{setShowForm(true);setFormType("client");setFormStatus("idle");}} style={{ background:"transparent", color:"#94a3b8", border:"1px solid #334155", borderRadius:12, padding:"13px 24px", fontSize:14, fontWeight:600, cursor:"pointer" }}>Je suis client</button>
+          <div style={{ fontSize:11, color:G, letterSpacing:"3px", fontWeight:700, textTransform:"uppercase" as const, marginBottom:16 }}>Rejoignez le réseau</div>
+          <h2 style={{ color:W, fontSize:28, fontWeight:800, marginBottom:12, letterSpacing:"-0.5px" }}>Vous êtes une agence de livraison ?</h2>
+          <p style={{ color:T3, fontSize:14, marginBottom:32, lineHeight:1.7 }}>Accédez à des clients qualifiés · Visibilité gratuite · Croissance immédiate</p>
+          <div style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap" }}>
+            <button onClick={()=>{setShowForm(true);setFormType("agence");setFormStatus("idle");}} style={{ background:G, color:N1, border:"none", borderRadius:6, padding:"14px 32px", fontSize:13, fontWeight:800, cursor:"pointer", letterSpacing:"1px" }}>INSCRIRE MON AGENCE →</button>
+            <button onClick={()=>{setShowForm(true);setFormType("client");setFormStatus("idle");}} style={{ background:"transparent", color:T2, border:`1px solid rgba(255,255,255,0.1)`, borderRadius:6, padding:"14px 24px", fontSize:13, fontWeight:600, cursor:"pointer" }}>Je suis client</button>
+          </div>
         </div>
       </section>
 
-      <footer style={{ background:"#0a1020", color:"#334155", padding:"28px 2rem", textAlign:"center" as const, fontSize:12 }}>
-        <div style={{ fontWeight:900, color:"#fff", fontSize:16, marginBottom:4 }}>DelivraMaroc</div>
-        <div style={{ color:"#475569" }}>Marketplace de livraison Maroc–Afrique · Casablanca 🇲🇦</div>
-        <div style={{ marginTop:6, color:"#1e293b" }}>© 2026 DelivraMaroc</div>
+      <footer style={{ background:"#050a14", color:T3, padding:"28px 2rem", textAlign:"center" as const, fontSize:11 }}>
+        <div style={{ fontWeight:900, color:G, fontSize:14, marginBottom:5, letterSpacing:"1px" }}>DELIVRAMAROC</div>
+        <div style={{ color:"#2a3545" }}>Plateforme logistique Maroc–Afrique · Casablanca 🇲🇦</div>
+        <div style={{ marginTop:6, color:"#1a2535", fontWeight:600 }}>© 2026 DelivraMaroc · Tous droits réservés</div>
       </footer>
 
       {/* MODAL NOM BOUTIQUE */}
       {showShopEdit && (
-        <div onClick={()=>setShowShopEdit(false)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.75)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, padding:"1rem", backdropFilter:"blur(8px)" }}>
-          <div onClick={e=>e.stopPropagation()} style={{ background:"#fff", borderRadius:20, padding:"32px", maxWidth:400, width:"100%", boxShadow:"0 24px 64px rgba(0,0,0,0.4)" }}>
-            <h3 style={{ fontSize:18, fontWeight:800, color:"#0f172a", margin:"0 0 8px" }}>🏪 Nom de ma boutique</h3>
-            <p style={{ color:"#64748b", fontSize:13, marginBottom:20 }}>Ce nom apparaîtra dans le chat à la place de votre prénom.</p>
-            <input value={shopNameInput} onChange={e=>setShopNameInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveShopName();}} placeholder="Ex: Boutique Ivan, ShopMaroc..." autoFocus style={{ width:"100%", padding:"13px 16px", borderRadius:12, border:"2px solid #e2e8f0", fontSize:15, outline:"none", boxSizing:"border-box" as const, marginBottom:14 }}/>
+        <div onClick={()=>setShowShopEdit(false)} style={{ position:"fixed", inset:0, background:"rgba(5,10,20,0.85)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, padding:"1rem", backdropFilter:"blur(10px)" }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:W, borderRadius:12, padding:"36px", maxWidth:420, width:"100%", boxShadow:"0 32px 80px rgba(0,0,0,0.4)" }}>
+            <h3 style={{ fontSize:18, fontWeight:800, color:T1, margin:"0 0 8px", letterSpacing:"-0.3px" }}>Nom de ma boutique</h3>
+            <p style={{ color:T2, fontSize:13, marginBottom:24, lineHeight:1.6 }}>Ce nom s&apos;affichera dans le chat à la place de votre prénom.</p>
+            <input value={shopNameInput} onChange={e=>setShopNameInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveShopName();}} placeholder="Ex : Boutique Ivan, MarocShop..." autoFocus style={{ width:"100%", padding:"13px 16px", borderRadius:6, border:`1.5px solid ${BORDER}`, fontSize:15, outline:"none", boxSizing:"border-box" as const, marginBottom:16, color:T1, fontWeight:600 }}/>
             <div style={{ display:"flex", gap:10 }}>
-              <button onClick={()=>setShowShopEdit(false)} style={{ flex:1, padding:"12px", borderRadius:10, border:"1px solid #e2e8f0", background:"#f8fafc", color:"#64748b", fontSize:14, fontWeight:600, cursor:"pointer" }}>Annuler</button>
-              <button onClick={saveShopName} style={{ flex:2, background:"linear-gradient(135deg,#22d3ee,#0ea5e9)", color:"#fff", border:"none", borderRadius:10, padding:"12px", fontSize:14, fontWeight:700, cursor:"pointer" }}>Enregistrer ✓</button>
+              <button onClick={()=>setShowShopEdit(false)} style={{ flex:1, padding:"12px", borderRadius:6, border:`1px solid ${BORDER}`, background:BG, color:T2, fontSize:13, fontWeight:600, cursor:"pointer" }}>Annuler</button>
+              <button onClick={saveShopName} style={{ flex:2, background:G, color:N1, border:"none", borderRadius:6, padding:"12px", fontSize:13, fontWeight:800, cursor:"pointer", letterSpacing:"0.5px" }}>ENREGISTRER ✓</button>
             </div>
           </div>
         </div>
@@ -735,26 +833,26 @@ export default function Home() {
 
       {/* MODAL AJOUTER PRODUIT */}
       {showAddProd && (
-        <div onClick={()=>setShowAddProd(false)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.75)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, padding:"1rem", backdropFilter:"blur(8px)" }}>
-          <div onClick={e=>e.stopPropagation()} style={{ background:"#fff", borderRadius:20, padding:"32px", maxWidth:420, width:"100%", boxShadow:"0 24px 64px rgba(0,0,0,0.4)" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
-              <h3 style={{ fontSize:18, fontWeight:800, color:"#0f172a", margin:0 }}>➕ Nouveau produit</h3>
-              <button onClick={()=>setShowAddProd(false)} style={{ background:"#f1f5f9", border:"none", borderRadius:"50%", width:32, height:32, fontSize:18, cursor:"pointer", color:"#64748b" }}>×</button>
+        <div onClick={()=>setShowAddProd(false)} style={{ position:"fixed", inset:0, background:"rgba(5,10,20,0.85)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, padding:"1rem", backdropFilter:"blur(10px)" }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:W, borderRadius:12, padding:"36px", maxWidth:440, width:"100%", boxShadow:"0 32px 80px rgba(0,0,0,0.4)" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
+              <h3 style={{ fontSize:18, fontWeight:800, color:T1, margin:0, letterSpacing:"-0.3px" }}>Nouveau produit</h3>
+              <button onClick={()=>setShowAddProd(false)} style={{ background:BG, border:"none", borderRadius:6, width:32, height:32, fontSize:16, cursor:"pointer", color:T2 }}>×</button>
             </div>
-            <div style={{ display:"flex", flexDirection:"column" as const, gap:14 }}>
+            <div style={{ display:"flex", flexDirection:"column" as const, gap:16 }}>
               <div>
-                <label style={{ fontSize:12, fontWeight:600, color:"#374151", display:"block", marginBottom:8 }}>Icône</label>
+                <label style={{ fontSize:11, fontWeight:700, color:T2, display:"block", marginBottom:8, textTransform:"uppercase" as const, letterSpacing:"1px" }}>Icône</label>
                 <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                  {EMOJIS.map(e=><button key={e} onClick={()=>setNewProd(p=>({...p,emoji:e}))} style={{ width:42, height:42, borderRadius:8, border:`2px solid ${newProd.emoji===e?"#0ea5e9":"#e2e8f0"}`, background:newProd.emoji===e?"#eff6ff":"#fff", fontSize:22, cursor:"pointer" }}>{e}</button>)}
+                  {EMOJIS.map(e=><button key={e} onClick={()=>setNewProd(p=>({...p,emoji:e}))} style={{ width:42, height:42, borderRadius:6, border:`2px solid ${newProd.emoji===e?G:BORDER}`, background:newProd.emoji===e?"rgba(201,168,76,0.08)":W, fontSize:20, cursor:"pointer" }}>{e}</button>)}
                 </div>
               </div>
-              {[{k:"name",l:"Nom du produit *",p:"Ex: Sac en cuir"},{k:"price",l:"Prix",p:"Ex: 150 DH"},{k:"description",l:"Description",p:"Ex: Fait main, livraison possible"}].map(f=>(
+              {[{k:"name",l:"Nom du produit *",p:"Ex : Sac en cuir"},{k:"price",l:"Prix",p:"Ex : 150 DH"},{k:"description",l:"Description",p:"Ex : Fait main, disponible"}].map(f=>(
                 <div key={f.k}>
-                  <label style={{ fontSize:12, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>{f.l}</label>
-                  <input value={newProd[f.k as keyof typeof newProd]} onChange={e=>setNewProd(p=>({...p,[f.k]:e.target.value}))} placeholder={f.p} style={{ width:"100%", padding:"10px 13px", borderRadius:9, border:"1px solid #e2e8f0", fontSize:13, outline:"none", boxSizing:"border-box" as const }}/>
+                  <label style={{ fontSize:11, fontWeight:700, color:T2, display:"block", marginBottom:6, textTransform:"uppercase" as const, letterSpacing:"1px" }}>{f.l}</label>
+                  <input value={newProd[f.k as keyof typeof newProd]} onChange={e=>setNewProd(p=>({...p,[f.k]:e.target.value}))} placeholder={f.p} style={{ width:"100%", padding:"11px 14px", borderRadius:6, border:`1.5px solid ${BORDER}`, fontSize:13, outline:"none", boxSizing:"border-box" as const, color:T1 }}/>
                 </div>
               ))}
-              <button onClick={addProduct} style={{ background:"linear-gradient(135deg,#0ea5e9,#0369a1)", color:"#fff", border:"none", borderRadius:10, padding:"13px", fontSize:14, fontWeight:700, cursor:"pointer", marginTop:4 }}>Publier le produit ✓</button>
+              <button onClick={addProduct} style={{ background:G, color:N1, border:"none", borderRadius:6, padding:"14px", fontSize:13, fontWeight:800, cursor:"pointer", marginTop:4, letterSpacing:"0.5px" }}>PUBLIER LE PRODUIT ✓</button>
             </div>
           </div>
         </div>
@@ -762,40 +860,40 @@ export default function Home() {
 
       {/* MODAL INSCRIPTION */}
       {showForm && (
-        <div onClick={()=>setShowForm(false)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.78)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, padding:"1rem", backdropFilter:"blur(8px)" }}>
-          <div onClick={e=>e.stopPropagation()} style={{ background:"#fff", borderRadius:20, padding:"32px", maxWidth:460, width:"100%", maxHeight:"90vh", overflowY:"auto" as const, boxShadow:"0 24px 64px rgba(0,0,0,0.45)" }}>
+        <div onClick={()=>setShowForm(false)} style={{ position:"fixed", inset:0, background:"rgba(5,10,20,0.88)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, padding:"1rem", backdropFilter:"blur(10px)" }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:W, borderRadius:12, padding:"36px", maxWidth:460, width:"100%", maxHeight:"90vh", overflowY:"auto" as const, boxShadow:"0 32px 80px rgba(0,0,0,0.5)" }}>
             {formStatus==="success" ? (
-              <div style={{ textAlign:"center" as const, padding:"20px 0" }}>
-                <div style={{ fontSize:60, marginBottom:16 }}>🎉</div>
-                <h3 style={{ fontSize:20, fontWeight:800, color:"#0f172a", marginBottom:8 }}>Inscription envoyée !</h3>
-                <p style={{ color:"#64748b", lineHeight:1.6 }}>Notre équipe vous contactera dans les 24h.</p>
-                <button onClick={()=>setShowForm(false)} style={{ marginTop:20, background:"#0ea5e9", color:"#fff", border:"none", borderRadius:10, padding:"11px 24px", fontSize:14, fontWeight:700, cursor:"pointer" }}>Fermer</button>
+              <div style={{ textAlign:"center" as const, padding:"24px 0" }}>
+                <div style={{ width:60, height:60, borderRadius:10, background:`linear-gradient(135deg,${G},${GD})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, margin:"0 auto 20px" }}>✓</div>
+                <h3 style={{ fontSize:20, fontWeight:800, color:T1, marginBottom:8 }}>Inscription transmise !</h3>
+                <p style={{ color:T2, lineHeight:1.7, fontSize:13 }}>Notre équipe vous contactera dans les 24h ouvrées.</p>
+                <button onClick={()=>setShowForm(false)} style={{ marginTop:20, background:G, color:N1, border:"none", borderRadius:6, padding:"11px 24px", fontSize:13, fontWeight:800, cursor:"pointer" }}>Fermer</button>
               </div>
             ) : (
               <>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
-                  <h3 style={{ fontSize:18, fontWeight:800, color:"#0f172a", margin:0 }}>{formType==="agence"?"📦 Inscrire mon agence":"🙋 Devenir client"}</h3>
-                  <button onClick={()=>setShowForm(false)} style={{ background:"#f1f5f9", border:"none", borderRadius:"50%", width:32, height:32, fontSize:18, cursor:"pointer", color:"#64748b" }}>×</button>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:22 }}>
+                  <h3 style={{ fontSize:18, fontWeight:800, color:T1, margin:0 }}>{formType==="agence"?"Inscrire mon agence":"Devenir client"}</h3>
+                  <button onClick={()=>setShowForm(false)} style={{ background:BG, border:"none", borderRadius:6, width:32, height:32, fontSize:16, cursor:"pointer", color:T2 }}>×</button>
                 </div>
-                <div style={{ display:"flex", gap:8, marginBottom:20 }}>
-                  <button onClick={()=>setFormType("client")} style={{ flex:1, padding:"9px", borderRadius:9, border:"2px solid", borderColor:formType==="client"?"#0ea5e9":"#e2e8f0", background:formType==="client"?"#eff6ff":"#fff", fontWeight:600, cursor:"pointer", fontSize:12 }}>Je suis client</button>
-                  <button onClick={()=>setFormType("agence")} style={{ flex:1, padding:"9px", borderRadius:9, border:"2px solid", borderColor:formType==="agence"?"#0ea5e9":"#e2e8f0", background:formType==="agence"?"#eff6ff":"#fff", fontWeight:600, cursor:"pointer", fontSize:12 }}>Je suis une agence</button>
+                <div style={{ display:"flex", gap:8, marginBottom:22 }}>
+                  <button onClick={()=>setFormType("client")} style={{ flex:1, padding:"9px", borderRadius:6, border:`1.5px solid`, borderColor:formType==="client"?G:BORDER, background:formType==="client"?"rgba(201,168,76,0.06)":W, fontWeight:700, cursor:"pointer", fontSize:12, color:formType==="client"?GD:T2 }}>Client</button>
+                  <button onClick={()=>setFormType("agence")} style={{ flex:1, padding:"9px", borderRadius:6, border:`1.5px solid`, borderColor:formType==="agence"?G:BORDER, background:formType==="agence"?"rgba(201,168,76,0.06)":W, fontWeight:700, cursor:"pointer", fontSize:12, color:formType==="agence"?GD:T2 }}>Agence</button>
                 </div>
-                <div style={{ display:"flex", flexDirection:"column" as const, gap:13 }}>
+                <div style={{ display:"flex", flexDirection:"column" as const, gap:14 }}>
                   {(formType==="agence"?([["Nom de l'agence *","nom"],["Responsable","responsable"],["Téléphone *","tel"],["Email","email"],["Zones desservies","zones"],["Tarif indicatif","tarif"]] as [string,string][]):([["Nom complet *","nom"],["Téléphone *","tel"],["Email","email"],["Ville","zones"]] as [string,string][])).map(([l,k])=>(
                     <div key={k}>
-                      <label style={{ fontSize:12, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>{l}</label>
-                      <input value={formData[k as keyof typeof formData]} onChange={e=>setFormData({...formData,[k]:e.target.value})} placeholder={l.replace(" *","")} style={{ width:"100%", padding:"10px 13px", borderRadius:9, border:`1px solid ${formStatus==="error"&&(k==="nom"||k==="tel")&&!formData[k as keyof typeof formData]?"#ef4444":"#e2e8f0"}`, fontSize:13, outline:"none", boxSizing:"border-box" as const }}/>
+                      <label style={{ fontSize:11, fontWeight:700, color:T2, display:"block", marginBottom:6, textTransform:"uppercase" as const, letterSpacing:"0.8px" }}>{l}</label>
+                      <input value={formData[k as keyof typeof formData]} onChange={e=>setFormData({...formData,[k]:e.target.value})} placeholder={l.replace(" *","")} style={{ width:"100%", padding:"11px 14px", borderRadius:6, border:`1.5px solid ${formStatus==="error"&&(k==="nom"||k==="tel")&&!formData[k as keyof typeof formData]?"#ef4444":BORDER}`, fontSize:13, outline:"none", boxSizing:"border-box" as const, color:T1 }}/>
                     </div>
                   ))}
                 </div>
-                {formStatus==="error" && <div style={{ marginTop:12, padding:"10px", background:"#fef2f2", border:"1px solid #fecaca", borderRadius:8, fontSize:12, color:"#dc2626" }}>⚠️ Remplissez les champs obligatoires (*)</div>}
+                {formStatus==="error" && <div style={{ marginTop:12, padding:"10px 14px", background:"#fef2f2", border:"1px solid #fecaca", borderRadius:6, fontSize:12, color:"#dc2626", fontWeight:600 }}>Veuillez remplir les champs obligatoires (*)</div>}
                 <button onClick={async()=>{
                   if(!formData.nom||!formData.tel){setFormStatus("error");return;}
                   setFormStatus("loading");
                   try{const res=await fetch("/api/inscriptions",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...formData,type:formType,created_at:new Date().toISOString()})});if(res.ok){setFormStatus("success");setFormData({nom:"",responsable:"",tel:"",email:"",zones:"",tarif:""});}else setFormStatus("error");}catch{setFormStatus("error");}
-                }} disabled={formStatus==="loading"} style={{ width:"100%", background:formStatus==="loading"?"#94a3b8":"linear-gradient(135deg,#0ea5e9,#0369a1)", color:"#fff", border:"none", borderRadius:11, padding:"13px", fontSize:14, fontWeight:700, cursor:formStatus==="loading"?"not-allowed":"pointer", marginTop:18 }}>
-                  {formStatus==="loading"?"⏳ Envoi...":formType==="agence"?"Envoyer ma demande ✓":"Trouver une agence →"}
+                }} disabled={formStatus==="loading"} style={{ width:"100%", background:formStatus==="loading"?T3:G, color:N1, border:"none", borderRadius:6, padding:"14px", fontSize:13, fontWeight:800, cursor:formStatus==="loading"?"not-allowed":"pointer", marginTop:20, letterSpacing:"0.5px" }}>
+                  {formStatus==="loading"?"Envoi en cours...":formType==="agence"?"SOUMETTRE MA CANDIDATURE →":"TROUVER UNE AGENCE →"}
                 </button>
               </>
             )}
@@ -805,23 +903,23 @@ export default function Home() {
 
       {/* MODAL NOM */}
       {showNameModal && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(3,8,20,0.93)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:2000, padding:"1rem", backdropFilter:"blur(12px)" }}>
-          <div style={{ background:"#fff", borderRadius:24, padding:"44px 36px", maxWidth:400, width:"100%", textAlign:"center" as const, boxShadow:"0 32px 80px rgba(0,0,0,0.5)" }}>
-            <div style={{ fontSize:56, marginBottom:16 }}>👋</div>
-            <h2 style={{ fontSize:22, fontWeight:900, color:"#0f172a", margin:"0 0 8px" }}>Bienvenue sur DelivraMaroc</h2>
-            <p style={{ color:"#64748b", fontSize:13, marginBottom:24, lineHeight:1.7 }}>Entrez votre prénom pour rejoindre la plateforme et discuter en temps réel.</p>
+        <div style={{ position:"fixed", inset:0, background:"rgba(5,10,20,0.95)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:2000, padding:"1rem", backdropFilter:"blur(16px)" }}>
+          <div style={{ background:W, borderRadius:12, padding:"48px 40px", maxWidth:420, width:"100%", textAlign:"center" as const, boxShadow:"0 40px 100px rgba(0,0,0,0.6)" }}>
+            <div style={{ width:56, height:56, borderRadius:10, background:`linear-gradient(135deg,${G},${GD})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, margin:"0 auto 20px" }}>DM</div>
+            <h2 style={{ fontSize:22, fontWeight:900, color:T1, margin:"0 0 10px", letterSpacing:"-0.5px" }}>Bienvenue sur DelivraMaroc</h2>
+            <p style={{ color:T2, fontSize:13, marginBottom:28, lineHeight:1.8 }}>Entrez votre prénom pour accéder à la plateforme et communiquer en temps réel.</p>
             {isOwner && (
-              <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:10, padding:"10px 14px", marginBottom:20, fontSize:12, color:"#166534", fontWeight:600 }}>
-                👑 Vous êtes le propriétaire
+              <div style={{ background:"rgba(201,168,76,0.06)", border:`1px solid rgba(201,168,76,0.2)`, borderRadius:6, padding:"10px 16px", marginBottom:22, fontSize:12, color:GD, fontWeight:700, letterSpacing:"0.5px" }}>
+                ★ ACCÈS PROPRIÉTAIRE
               </div>
             )}
-            <input value={nameInput} onChange={e=>setNameInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")joinChat();}} placeholder="Votre prénom..." autoFocus style={{ width:"100%", padding:"14px 18px", borderRadius:12, border:"2px solid #e2e8f0", fontSize:16, outline:"none", boxSizing:"border-box" as const, marginBottom:14, textAlign:"center" as const, fontWeight:600 }}/>
-            <label style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, marginBottom:18, cursor:"pointer", fontSize:13, color:"#64748b" }}>
-              <input type="checkbox" checked={rememberMe} onChange={e=>setRememberMe(e.target.checked)} style={{ width:16, height:16, cursor:"pointer" }}/>
+            <input value={nameInput} onChange={e=>setNameInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")joinChat();}} placeholder="Votre prénom..." autoFocus style={{ width:"100%", padding:"14px 18px", borderRadius:6, border:`1.5px solid ${BORDER}`, fontSize:16, outline:"none", boxSizing:"border-box" as const, marginBottom:14, textAlign:"center" as const, fontWeight:700, color:T1 }}/>
+            <label style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, marginBottom:20, cursor:"pointer", fontSize:13, color:T2 }}>
+              <input type="checkbox" checked={rememberMe} onChange={e=>setRememberMe(e.target.checked)} style={{ width:15, height:15, cursor:"pointer", accentColor:G }}/>
               Se souvenir de moi
             </label>
-            <button onClick={joinChat} style={{ width:"100%", background:"linear-gradient(135deg,#22d3ee,#0ea5e9)", color:"#fff", border:"none", borderRadius:12, padding:"14px", fontSize:15, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 16px rgba(34,211,238,0.35)" }}>
-              Rejoindre la plateforme →
+            <button onClick={joinChat} style={{ width:"100%", background:G, color:N1, border:"none", borderRadius:6, padding:"15px", fontSize:14, fontWeight:800, cursor:"pointer", letterSpacing:"1px" }}>
+              ACCÉDER À LA PLATEFORME →
             </button>
           </div>
         </div>
